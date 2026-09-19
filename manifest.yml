@@ -1,0 +1,20 @@
+modules:
+  jira:fullPage:
+    - key: planning-poker-hello-world-full-page
+      resource: main
+      resolver:
+        function: resolver
+      title: planning-poker
+      routePrefix: hello-world
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: static/hello-world/build
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/deb33b6c-f617-4290-bfe8-a8500d4db3e2
