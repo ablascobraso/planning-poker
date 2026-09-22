@@ -1,17 +1,24 @@
 modules:
-  jira:fullPage:
-    - key: planning-poker-hello-world-full-page
+  jira:issuePanel:
+    - key: planning-poker-panel
       resource: main
       resolver:
         function: resolver
-      title: planning-poker
-      routePrefix: hello-world
+      title: Planning Poker
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      viewportSize: large
   function:
     - key: resolver
       handler: index.handler
 resources:
   - key: main
-    path: static/hello-world/build
+    path: static/planning-poker/build
+permissions:
+  scopes:
+    - storage:app
+    - read:jira-work
+    - write:jira-work
+    - read:jira-user
 app:
   runtime:
     name: nodejs24.x

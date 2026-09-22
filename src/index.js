@@ -1,12 +1,9 @@
 import Resolver from '@forge/resolver';
 
+import { defineSessionResolvers } from './resolvers/session';
+
 const resolver = new Resolver();
 
-resolver.define('getText', (req) => {
-    console.log(req);
-
-    return 'Hello world!';
-});
+defineSessionResolvers(resolver);
 
 export const handler = resolver.getDefinitions();
-

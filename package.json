@@ -1,17 +1,19 @@
 {
-  "name": "jira-full-page-custom-ui",
-  "title": "Jira full page custom UI",
-  "description": "Template for Jira full page module for custom UI",
-  "link": "https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-full-page/",
-  "version": "1.2.3",
+  "name": "planning-poker",
+  "title": "Planning Poker for Jira",
+  "description": "Private planning poker voting on Jira issues, with live reveal and story point saving.",
+  "version": "0.1.0",
   "main": "index.js",
   "license": "MIT",
   "private": true,
-  "devDependencies": {
-    "eslint": "^8.56.0",
-    "eslint-plugin-react-hooks": "^4.6.0"
+  "scripts": {
+    "build": "npm --prefix static/planning-poker run build",
+    "install:ui": "npm --prefix static/planning-poker install"
   },
   "dependencies": {
+    "@forge/api": "8.1.0",
+    "@forge/kvs": "2.0.6",
+    "@forge/realtime": "1.0.1",
     "@forge/resolver": "2.0.0"
   }
 }
