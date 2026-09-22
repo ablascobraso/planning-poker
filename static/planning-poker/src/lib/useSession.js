@@ -80,6 +80,12 @@ export function useSession() {
                 return;
             }
 
+            // A new round makes any earlier "Saved N story points" notice stale -
+            // it referred to a previous round's result, not this one.
+            if (payload.type === 'started' || payload.type === 'reset' || payload.type === 'ended') {
+                setEstimate(null);
+            }
+
             setState((prev) => {
                 switch (payload.type) {
                     case 'started':
@@ -147,11 +153,20 @@ export function useSession() {
     }, [refresh]);
 
     const actions = {
-        start: (scale) => run(() => api.startSession(scale)),
+        start: (scale) => {
+            setEstimate(null);
+            return run(() => api.startSession(scale));
+        },
         vote: (card) => run(() => api.castVote(card)),
         reveal: () => run(api.reveal),
-        revote: () => run(api.revote),
-        end: () => run(api.endSession),
+        revote: () => {
+            setEstimate(null);
+            return run(api.revote);
+        },
+        end: () => {
+            setEstimate(null);
+            return run(api.endSession);
+        },
         save: async (value) => {
             const data = await run(() => api.saveEstimate(value));
             if (data) {
