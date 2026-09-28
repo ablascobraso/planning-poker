@@ -18,7 +18,6 @@ export function useSession() {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
-    const [estimate, setEstimate] = useState(null);
 
     // Mirrors the active round so incoming events can be checked for staleness
     // without reading state inside a setState updater, which must stay pure.
@@ -73,17 +72,6 @@ export function useSession() {
             if (roundScoped && payload.round !== roundRef.current) {
                 refresh();
                 return;
-            }
-
-            if (payload.type === 'saved') {
-                setEstimate(payload.estimate);
-                return;
-            }
-
-            // A new round makes any earlier "Saved N story points" notice stale -
-            // it referred to a previous round's result, not this one.
-            if (payload.type === 'started' || payload.type === 'reset' || payload.type === 'ended') {
-                setEstimate(null);
             }
 
             setState((prev) => {
@@ -153,28 +141,12 @@ export function useSession() {
     }, [refresh]);
 
     const actions = {
-        start: (scale) => {
-            setEstimate(null);
-            return run(() => api.startSession(scale));
-        },
+        start: (scale) => run(() => api.startSession(scale)),
         vote: (card) => run(() => api.castVote(card)),
         reveal: () => run(api.reveal),
-        revote: () => {
-            setEstimate(null);
-            return run(api.revote);
-        },
-        end: () => {
-            setEstimate(null);
-            return run(api.endSession);
-        },
-        save: async (value) => {
-            const data = await run(() => api.saveEstimate(value));
-            if (data) {
-                setEstimate(data.estimate);
-            }
-            return data;
-        },
+        revote: () => run(api.revote),
+        end: () => run(api.endSession),
     };
 
-    return { ...state, loading, busy, error, estimate, actions, dismissError: () => setError(null) };
+    return { ...state, loading, busy, error, actions, dismissError: () => setError(null) };
 }

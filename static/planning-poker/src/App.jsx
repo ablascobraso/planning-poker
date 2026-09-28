@@ -17,15 +17,15 @@ function StartScreen({ scales, busy, onStart }) {
 
             <div className="empty__actions">
                 <label className="field">
-                    <span className="field__label">Scale</span>
+                    <span className="field__label">Deck</span>
                     <select
                         className="field__control"
                         value={scale}
                         onChange={(event) => setScale(event.target.value)}
                     >
-                        {scales.map(({ id, label }) => (
+                        {scales.map(({ id, label, cards }) => (
                             <option key={id} value={id}>
-                                {label}
+                                {label} ({cards.join(', ')})
                             </option>
                         ))}
                     </select>
@@ -55,7 +55,6 @@ export default function App() {
         loading,
         busy,
         error,
-        estimate,
         actions,
         dismissError,
     } = useSession();
@@ -83,7 +82,9 @@ export default function App() {
                 <>
                     <header className="header">
                         <div>
-                            <h2 className="header__title">Planning Poker</h2>
+                            <h2 className="header__title">
+                                {revealed ? 'Cards revealed!' : 'Pick your card!'}
+                            </h2>
                             <p className="muted">
                                 Round {session.round} ·{' '}
                                 {revealed ? 'Revealed' : `${votes.length} voted`}
@@ -98,7 +99,7 @@ export default function App() {
                                     disabled={busy || votes.length === 0}
                                     onClick={actions.reveal}
                                 >
-                                    Reveal
+                                    Reveal cards
                                 </button>
                             )}
                             {revealed && (
@@ -136,14 +137,7 @@ export default function App() {
                         <Participants votes={votes} me={me} revealed={revealed} />
                     </section>
 
-                    {revealed && (
-                        <Results
-                            votes={votes}
-                            busy={busy}
-                            estimate={estimate}
-                            onSave={actions.save}
-                        />
-                    )}
+                    {revealed && <Results votes={votes} />}
                 </>
             )}
         </div>

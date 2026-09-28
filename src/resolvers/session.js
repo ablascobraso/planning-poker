@@ -3,7 +3,6 @@ import api, { route } from '@forge/api';
 import { broadcast, EVENTS } from '../lib/events';
 import { cardsFor, DEFAULT_SCALE, isValidCard, isValidScale, scaleOptions } from '../lib/scales';
 import { clearVotes, readSession, readVotes, writeSession, writeVote, deleteSession } from '../lib/store';
-import { saveStoryPoints } from '../lib/storyPoints';
 
 // THE PRIVACY BOUNDARY. While a round is open the server knows every card but
 // must never let one leave: clients learn only *that* somebody voted. Doing this
@@ -203,23 +202,6 @@ export function defineSessionResolvers(resolver) {
             await broadcast(EVENTS.ENDED, {});
 
             return { session: null, cards: [], votes: [], myVote: null, scales: scaleOptions() };
-        })
-    );
-
-    resolver.define(
-        'saveEstimate',
-        handle(async (req) => {
-            const { issueId } = contextOf(req);
-            const value = Number(req.payload?.value);
-
-            if (!Number.isFinite(value) || value < 0) {
-                throw new Error('Story points must be a non-negative number.');
-            }
-
-            await saveStoryPoints(issueId, value);
-            await broadcast(EVENTS.SAVED, { estimate: value });
-
-            return { estimate: value };
         })
     );
 }

@@ -19,4 +19,3 @@ export const castVote = (card) => call('castVote', { card });
 export const reveal = () => call('reveal');
 export const revote = () => call('revote');
 export const endSession = () => call('endSession');
-export const saveEstimate = (value) => call('saveEstimate', { value });

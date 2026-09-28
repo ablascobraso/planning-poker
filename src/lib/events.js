@@ -10,7 +10,6 @@ export const EVENTS = {
     VOTED: 'voted',
     REVEALED: 'revealed',
     RESET: 'reset',
-    SAVED: 'saved',
     ENDED: 'ended',
 };
 
