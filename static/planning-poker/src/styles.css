@@ -1,36 +1,33 @@
+/* Colours come from Jira's design tokens (injected once view.theme.enable() runs),
+   so the panel follows Jira's light/dark setting rather than the OS. The hex
+   values are light-mode fallbacks for the moment before the tokens arrive. */
 :root {
-    --pp-text: #172b4d;
-    --pp-subtle: #626f86;
-    --pp-border: #dfe1e6;
-    --pp-surface: #ffffff;
-    --pp-surface-raised: #f7f8f9;
-    --pp-accent: #0c66e4;
-    --pp-accent-text: #ffffff;
-    --pp-danger-bg: #ffeceb;
-    --pp-danger-text: #ae2e24;
-    --pp-ok-bg: #dcfff1;
-    --pp-ok-text: #216e4e;
+    --pp-text: var(--ds-text, #172b4d);
+    --pp-subtle: var(--ds-text-subtle, #626f86);
+    --pp-border: var(--ds-border, #dfe1e6);
+    --pp-surface: var(--ds-surface, #ffffff);
+    --pp-surface-raised: var(--ds-background-neutral, #f7f8f9);
+    --pp-accent: var(--ds-background-brand-bold, #0c66e4);
+    --pp-accent-text: var(--ds-text-inverse, #ffffff);
+    --pp-danger-bg: var(--ds-background-danger, #ffeceb);
+    --pp-danger-text: var(--ds-text-danger, #ae2e24);
+    --pp-ok-bg: var(--ds-background-success, #dcfff1);
+    --pp-ok-text: var(--ds-text-success, #216e4e);
     --pp-radius: 6px;
+    color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --pp-text: #c7d1db;
-        --pp-subtle: #9fadbc;
-        --pp-border: #2c333a;
-        --pp-surface: #1d2125;
-        --pp-surface-raised: #22272b;
-        --pp-accent: #579dff;
-        --pp-accent-text: #1d2125;
-        --pp-danger-bg: #42221f;
-        --pp-danger-text: #fd9891;
-        --pp-ok-bg: #1c3329;
-        --pp-ok-text: #7ee2b8;
-    }
+/* Native controls (select popup, number spinners, scrollbars) follow this. */
+html[data-color-mode='dark'] {
+    color-scheme: dark;
+}
+
+html[data-color-mode='auto'] {
+    color-scheme: light dark;
 }
 
 body {
-    background: transparent;
+    background: var(--ds-elevation-surface-current, var(--pp-surface));
     color: var(--pp-text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
