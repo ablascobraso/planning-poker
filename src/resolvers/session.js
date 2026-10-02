@@ -2,7 +2,15 @@ import api, { route } from '@forge/api';
 
 import { broadcast, EVENTS } from '../lib/events';
 import { cardsFor, DEFAULT_SCALE, isValidCard, isValidScale, scaleOptions } from '../lib/scales';
-import { clearVotes, readSession, readVotes, writeSession, writeVote, deleteSession } from '../lib/store';
+import {
+    clearVotes,
+    deleteSession,
+    readSession,
+    readVotes,
+    renewVotes,
+    writeSession,
+    writeVote,
+} from '../lib/store';
 
 // THE PRIVACY BOUNDARY. While a round is open the server knows every card but
 // must never let one leave: clients learn only *that* somebody voted. Doing this
@@ -159,6 +167,7 @@ export function defineSessionResolvers(resolver) {
             }
 
             await writeSession(issueId, { ...session, revealed: true });
+            await renewVotes(issueId, votes);
 
             // The one moment cards become public. Sending them in the event saves
             // every open panel a resolver round-trip just to learn the result.

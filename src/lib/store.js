@@ -13,21 +13,51 @@ const votePrefix = (issueId) => `pp:v:${issueId}:`;
 
 const TRANSACTION_LIMIT = 25;
 
+// An issue should be estimated within a few days, so a session lives 72 hours (long
+// enough to span a weekend) from its last start, reveal or new round. Forge deletes
+// expired keys on its own, which keeps stored personal data (names, avatars) and
+// storage use low. Deletion can lag up to another 48 hours and reads may still return
+// expired keys meanwhile, so readSession also checks the age recorded on the session.
+const LIFETIME_HOURS = 72;
+const LIFETIME_MS = LIFETIME_HOURS * 60 * 60 * 1000;
+const EXPIRY = { ttl: { unit: 'HOURS', value: LIFETIME_HOURS } };
+
 export async function readSession(issueId) {
     const session = await kvs.get(sessionKey(issueId));
-    return session ?? null;
+
+    if (!session) {
+        return null;
+    }
+
+    const touchedAt = session.updatedAt ?? session.startedAt ?? 0;
+    return Date.now() - touchedAt > LIFETIME_MS ? null : session;
 }
 
 export async function writeSession(issueId, session) {
-    await kvs.set(sessionKey(issueId), session);
+    await kvs.set(sessionKey(issueId), { ...session, updatedAt: Date.now() }, EXPIRY);
 }
 
 export async function deleteSession(issueId) {
     await kvs.delete(sessionKey(issueId));
 }
 
+// Votes deliberately don't touch the session: rewriting the shared session object
+// on every vote could race with a reveal and silently un-reveal the round.
 export async function writeVote(issueId, accountId, vote) {
-    await kvs.set(voteKey(issueId, accountId), vote);
+    await kvs.set(voteKey(issueId, accountId), vote, EXPIRY);
+}
+
+// A reveal extends the session, so re-stamp its votes too - otherwise votes cast
+// early in the round could expire while the revealed results are still on screen.
+export async function renewVotes(issueId, votes) {
+    for (let i = 0; i < votes.length; i += TRANSACTION_LIMIT) {
+        const batch = votes.slice(i, i + TRANSACTION_LIMIT);
+        const transaction = batch.reduce(
+            (tx, { accountId, ...vote }) => tx.set(voteKey(issueId, accountId), vote, EXPIRY),
+            kvs.transact()
+        );
+        await transaction.execute();
+    }
 }
 
 export async function readVotes(issueId) {
