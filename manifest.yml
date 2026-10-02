@@ -5,7 +5,7 @@ modules:
       resolver:
         function: resolver
       title: Planning Poker
-      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      icon: resource:main;icon.svg
       viewportSize: large
   function:
     - key: resolver
