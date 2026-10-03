@@ -13,6 +13,7 @@ export const EVENTS = {
     RESET: 'reset',
     ENDED: 'ended',
     FOCUS: 'focus',
+    QUEUE: 'queue',
 };
 
 // A failed broadcast must not fail the user's action: by the time we publish, the

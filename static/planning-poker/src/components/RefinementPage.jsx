@@ -1,37 +1,52 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { realtime, router } from '@forge/bridge';
 
 import * as api from '../lib/api';
 import { CHANNEL, useSession } from '../lib/useSession';
+import IssuePicker from './IssuePicker';
 import SessionView from './SessionView';
 
 function FocusedSession({ issueId }) {
     return <SessionView {...useSession(issueId)} />;
 }
 
-// A project page for refinement meetings: the team works down a list of issues,
-// estimating each one in its own independent session. The issue being estimated
-// is shared, so when anyone moves on, everyone on the page moves with them.
+const CONFIRM_WINDOW_MS = 3000;
+
+// A project page for refinement meetings. The team builds a hand-picked queue of
+// issues and works down it, estimating each one in its own independent session.
+// The queue and the issue being estimated are shared, so everyone follows along.
 export default function RefinementPage() {
-    const [issues, setIssues] = useState([]);
+    const [queue, setQueue] = useState([]);
     const [focusId, setFocusId] = useState(null);
+    const [picking, setPicking] = useState(false);
+    const [confirmingClear, setConfirmingClear] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const clearTimer = useRef(null);
+
+    const load = useCallback(async () => {
+        try {
+            const data = await api.getRefinement();
+            setQueue(data.queue);
+            setFocusId(data.focusIssueId);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        api.getRefinement()
-            .then((data) => {
-                setIssues(data.issues);
-                setFocusId(data.focusIssueId);
-            })
-            .catch((err) => setError(err.message))
-            .finally(() => setLoading(false));
-    }, []);
+        load();
+    }, [load]);
 
     useEffect(() => {
         const onEvent = (payload) => {
             if (payload?.type === 'focus') {
                 setFocusId(payload.issueId);
+            }
+            if (payload?.type === 'queue') {
+                load();
             }
         };
 
@@ -51,28 +66,135 @@ export default function RefinementPage() {
         return () => {
             active = false;
             subscription?.unsubscribe();
+            clearTimeout(clearTimer.current);
         };
-    }, []);
+    }, [load]);
+
+    // Wraps queue/focus actions with the same error handling.
+    const attempt = async (action) => {
+        try {
+            const result = await action();
+            setError(null);
+            return result;
+        } catch (err) {
+            setError(err.message);
+            return null;
+        }
+    };
 
     const focusOn = async (issueId) => {
         const previous = focusId;
         setFocusId(issueId);
-        try {
-            await api.setFocus(issueId);
-            setError(null);
-        } catch (err) {
+        const result = await attempt(() => api.setFocus(issueId));
+        if (!result) {
             setFocusId(previous);
-            setError(err.message);
+        }
+    };
+
+    const addIssues = async (issueIds) => {
+        const result = await attempt(() => api.addToQueue(issueIds));
+        if (result) {
+            setQueue(result.queue);
+            setPicking(false);
+            // Starting from an empty page, jump straight to the first new issue.
+            if (!focusId && result.queue.length > 0) {
+                focusOn(result.queue[0].id);
+            }
+        }
+    };
+
+    const removeIssue = async (issueId) => {
+        const result = await attempt(() => api.removeFromQueue(issueId));
+        if (result) {
+            setQueue(result.queue);
+        }
+    };
+
+    // Clearing wipes the team's shared list, so it takes a second click.
+    const clearQueue = async () => {
+        if (!confirmingClear) {
+            setConfirmingClear(true);
+            clearTimer.current = setTimeout(() => setConfirmingClear(false), CONFIRM_WINDOW_MS);
+            return;
+        }
+        clearTimeout(clearTimer.current);
+        setConfirmingClear(false);
+        const result = await attempt(() => api.clearQueue());
+        if (result) {
+            setQueue(result.queue);
         }
     };
 
     if (loading) {
-        return <div className="shell shell--centered muted">Loading issues…</div>;
+        return <div className="shell shell--centered muted">Loading queue…</div>;
     }
 
-    const index = issues.findIndex((issue) => issue.id === focusId);
-    const current = index >= 0 ? issues[index] : null;
-    const next = index >= 0 ? issues[index + 1] : null;
+    const index = queue.findIndex((issue) => issue.id === focusId);
+    const current = index >= 0 ? queue[index] : null;
+    const next = index >= 0 ? queue[index + 1] : null;
+
+    const renderMain = () => {
+        if (picking) {
+            return (
+                <IssuePicker
+                    queuedIds={queue.map((issue) => issue.id)}
+                    onAdd={addIssues}
+                    onClose={() => setPicking(false)}
+                />
+            );
+        }
+
+        if (queue.length === 0) {
+            return (
+                <div className="empty">
+                    <h2 className="empty__title">Build your estimation queue</h2>
+                    <p className="muted">
+                        Add the issues you want to estimate in this meeting. Everyone on this
+                        page works through them together, one at a time.
+                    </p>
+                    <button type="button" className="btn btn--primary" onClick={() => setPicking(true)}>
+                        + Add issues
+                    </button>
+                </div>
+            );
+        }
+
+        if (!focusId) {
+            return (
+                <div className="empty">
+                    <h2 className="empty__title">Pick an issue to start</h2>
+                    <p className="muted">Choose an issue from the queue to estimate it together.</p>
+                </div>
+            );
+        }
+
+        return (
+            <>
+                <div className="current">
+                    <div className="current__info">
+                        {current && (
+                            <button
+                                type="button"
+                                className="current__key"
+                                onClick={() => router.open(`/browse/${current.key}`)}
+                            >
+                                {current.key}
+                            </button>
+                        )}
+                        <h2 className="current__summary">
+                            {current?.summary ?? 'This issue is no longer in the queue'}
+                        </h2>
+                    </div>
+                    {next && (
+                        <button type="button" className="btn" onClick={() => focusOn(next.id)}>
+                            Next issue →
+                        </button>
+                    )}
+                </div>
+                <FocusedSession key={focusId} issueId={focusId} />
+            </>
+        );
+    };
 
     return (
         <div className="refinement">
@@ -86,66 +208,54 @@ export default function RefinementPage() {
             )}
 
             <aside className="refinement__list">
-                <h2 className="section-title">Issues to estimate ({issues.length})</h2>
+                <div className="refinement__head">
+                    <h2 className="section-title">Estimation queue ({queue.length})</h2>
+                    <button type="button" className="btn" onClick={() => setPicking(true)}>
+                        + Add issues
+                    </button>
+                </div>
 
-                {issues.length === 0 ? (
-                    <p className="muted">No open issues in this project.</p>
+                {queue.length === 0 ? (
+                    <p className="muted">No issues yet.</p>
                 ) : (
                     <ul className="issues">
-                        {issues.map((issue) => (
-                            <li key={issue.id}>
+                        {queue.map((issue) => (
+                            <li key={issue.id} className="queue-item">
                                 <button
                                     type="button"
                                     className={`issue${issue.id === focusId ? ' issue--active' : ''}`}
                                     aria-current={issue.id === focusId}
-                                    onClick={() => focusOn(issue.id)}
+                                    onClick={() => {
+                                        setPicking(false);
+                                        focusOn(issue.id);
+                                    }}
                                 >
                                     <span className="issue__key">{issue.key}</span>
                                     <span className="issue__summary">{issue.summary}</span>
                                     <span className="issue__status">{issue.status}</span>
                                 </button>
+                                <button
+                                    type="button"
+                                    className="queue-item__remove"
+                                    aria-label={`Remove ${issue.key} from the queue`}
+                                    title="Remove from queue"
+                                    onClick={() => removeIssue(issue.id)}
+                                >
+                                    ×
+                                </button>
                             </li>
                         ))}
                     </ul>
                 )}
+
+                {queue.length > 0 && (
+                    <button type="button" className="link refinement__clear" onClick={clearQueue}>
+                        {confirmingClear ? 'Click again to clear the queue' : 'Clear queue'}
+                    </button>
+                )}
             </aside>
 
-            <main className="refinement__session">
-                {focusId ? (
-                    <>
-                        <div className="current">
-                            <div className="current__info">
-                                {current && (
-                                    <button
-                                        type="button"
-                                        className="current__key"
-                                        onClick={() => router.open(`/browse/${current.key}`)}
-                                    >
-                                        {current.key}
-                                    </button>
-                                )}
-                                <h2 className="current__summary">
-                                    {current?.summary ?? 'This issue is no longer in the list'}
-                                </h2>
-                            </div>
-                            {next && (
-                                <button type="button" className="btn" onClick={() => focusOn(next.id)}>
-                                    Next issue →
-                                </button>
-                            )}
-                        </div>
-                        <FocusedSession key={focusId} issueId={focusId} />
-                    </>
-                ) : (
-                    <div className="empty">
-                        <h2 className="empty__title">Pick an issue to start</h2>
-                        <p className="muted">
-                            Choose an issue from the list. Everyone on this page will
-                            estimate it together, then move on to the next one.
-                        </p>
-                    </div>
-                )}
-            </main>
+            <main className="refinement__session">{renderMain()}</main>
         </div>
     );
 }

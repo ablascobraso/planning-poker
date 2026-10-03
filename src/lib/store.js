@@ -10,6 +10,7 @@ import { kvs, WhereConditions } from '@forge/kvs';
 const sessionKey = (issueId) => `pp:s:${issueId}`;
 const focusKey = (projectId) => `pp:f:${projectId}`;
 const deckKey = (projectId) => `pp:d:${projectId}`;
+const queueKey = (projectId) => `pp:q:${projectId}`;
 const voteKey = (issueId, accountId) => `pp:v:${issueId}:${accountId}`;
 const votePrefix = (issueId) => `pp:v:${issueId}:`;
 
@@ -65,6 +66,19 @@ export async function readDefaultDeck(projectId) {
 
 export async function writeDefaultDeck(projectId, scale) {
     await kvs.set(deckKey(projectId), { scale, updatedAt: Date.now() });
+}
+
+// The space's hand-picked estimation queue: issue ids in the order they were
+// added. Only ids are stored - summaries and statuses are fetched live so they
+// never go stale. Edits are read-modify-write on one record, which is fine for a
+// list a facilitator curates, unlike votes where simultaneous writes are normal.
+export async function readQueue(projectId) {
+    const queue = await kvs.get(queueKey(projectId));
+    return queue?.issueIds ?? [];
+}
+
+export async function writeQueue(projectId, issueIds) {
+    await kvs.set(queueKey(projectId), { issueIds, updatedAt: Date.now() });
 }
 
 export async function deleteSession(issueId) {

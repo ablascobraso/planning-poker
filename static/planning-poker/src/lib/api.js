@@ -29,3 +29,8 @@ export function sessionApi(issueId) {
 
 export const getRefinement = () => call('getRefinement');
 export const setFocus = (issueId) => call('setFocus', { issueId });
+export const searchIssues = (text, chip, pageToken) =>
+    call('searchIssues', { text, chip, pageToken });
+export const addToQueue = (issueIds) => call('addToQueue', { issueIds });
+export const removeFromQueue = (issueId) => call('removeFromQueue', { issueId });
+export const clearQueue = () => call('clearQueue');

@@ -474,3 +474,162 @@ body {
     font-size: 18px;
     font-weight: 600;
 }
+
+/* Estimation queue */
+.refinement__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.refinement__head .section-title {
+    margin: 0;
+}
+
+.queue-item {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+}
+
+.queue-item .issue {
+    flex: 1;
+    min-width: 0;
+}
+
+.queue-item__remove {
+    flex: 0 0 auto;
+    width: 28px;
+    border: none;
+    border-radius: var(--pp-radius);
+    background: none;
+    color: var(--pp-subtle);
+    font-size: 16px;
+    cursor: pointer;
+    opacity: 0;
+}
+
+.queue-item:hover .queue-item__remove,
+.queue-item__remove:focus-visible {
+    opacity: 1;
+}
+
+.queue-item__remove:hover {
+    background: var(--pp-surface-raised);
+    color: var(--pp-danger-text);
+}
+
+.refinement__clear {
+    align-self: flex-start;
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.link:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+/* "Add issues" picker */
+.picker {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.picker__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.picker__search {
+    width: 100%;
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chip-toggle {
+    border: 1px solid var(--pp-border);
+    border-radius: var(--pp-radius);
+    background: none;
+    color: var(--pp-text);
+    font-size: 13px;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.chip-toggle:hover {
+    background: var(--pp-surface-raised);
+}
+
+.chip-toggle--active {
+    border-color: var(--pp-accent);
+    color: var(--pp-accent);
+    font-weight: 600;
+}
+
+.picker__results {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 360px;
+    overflow-y: auto;
+    border-top: 1px solid var(--pp-border);
+    border-bottom: 1px solid var(--pp-border);
+    padding: 4px 0;
+}
+
+.picker__row {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-radius: var(--pp-radius);
+    cursor: pointer;
+}
+
+/* Key and status reuse the queue row styles, whose named grid areas don't exist here. */
+.picker__row > * {
+    grid-area: auto;
+}
+
+.picker__row:hover {
+    background: var(--pp-surface-raised);
+}
+
+.picker__row--queued {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.picker__summary {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.picker__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.picker__actions {
+    display: flex;
+    gap: 8px;
+}
+
+.picker__more {
+    align-self: center;
+    margin: 6px 0;
+}
