@@ -71,13 +71,13 @@ async function unestimatedClause() {
 // always limited to unfinished, non-subtask work in this space.
 const CHIPS = {
     recent: { jql: () => 'issue in issueHistory()', order: 'lastViewed DESC' },
-    // Everything on Jira's Backlog page: planned (not yet started) sprints plus the
-    // backlog section, including leftovers still tagged with a closed sprint - i.e.
-    // anything not in an active sprint. NOT IN never matches an empty field, hence
-    // the explicit "is EMPTY" branch. Epics are dropped after the search (see
-    // below) rather than by name, which varies by site.
+    // Exactly the "Backlog" section of Jira's Backlog page: not in an active or a
+    // planned sprint, including leftovers still tagged with a closed sprint. (Planned
+    // sprints are the "Next sprint" chip.) NOT IN never matches an empty field,
+    // hence the explicit "is EMPTY" branch. Epics are dropped after the search
+    // (see below) rather than by name, which varies by site.
     backlog: {
-        jql: () => '(sprint is EMPTY OR sprint not in openSprints())',
+        jql: () => '(sprint is EMPTY OR sprint not in (openSprints(), futureSprints()))',
         order: 'Rank ASC',
         hideEpics: true,
     },
