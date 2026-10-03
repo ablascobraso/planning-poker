@@ -9,6 +9,7 @@ import { kvs, WhereConditions } from '@forge/kvs';
 // moment - which in planning poker is the normal case, not an edge case.
 const sessionKey = (issueId) => `pp:s:${issueId}`;
 const focusKey = (projectId) => `pp:f:${projectId}`;
+const deckKey = (projectId) => `pp:d:${projectId}`;
 const voteKey = (issueId, accountId) => `pp:v:${issueId}:${accountId}`;
 const votePrefix = (issueId) => `pp:v:${issueId}:`;
 
@@ -52,6 +53,18 @@ export async function readFocus(projectId) {
 
 export async function writeFocus(projectId, issueId) {
     await kvs.set(focusKey(projectId), { issueId, updatedAt: Date.now() }, EXPIRY);
+}
+
+// The deck a Jira space (project) uses by default: whichever was picked for the
+// most recent session there. It's a team preference rather than session data, so
+// unlike everything else it doesn't expire.
+export async function readDefaultDeck(projectId) {
+    const deck = await kvs.get(deckKey(projectId));
+    return deck?.scale ?? null;
+}
+
+export async function writeDefaultDeck(projectId, scale) {
+    await kvs.set(deckKey(projectId), { scale, updatedAt: Date.now() });
 }
 
 export async function deleteSession(issueId) {

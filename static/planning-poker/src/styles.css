@@ -276,6 +276,33 @@ body {
     margin-top: 8px;
 }
 
+.empty__actions--center {
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.deck-summary {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--pp-subtle);
+}
+
+.link {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--pp-accent);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.link:hover {
+    text-decoration: underline;
+}
+
 .field {
     display: flex;
     flex-direction: column;

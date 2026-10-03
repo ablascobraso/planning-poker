@@ -11,6 +11,7 @@ const EMPTY = {
     scales: [],
     votes: [],
     myVote: null,
+    defaultScale: null,
 };
 
 // State and actions for one issue's session. Pass an issueId on the refinement
@@ -93,6 +94,8 @@ export function useSession(issueId) {
                             ...prev,
                             ...EMPTY,
                             scales: prev.scales,
+                            // Starting a session also made its deck the space default.
+                            defaultScale: payload.scale,
                             cards: payload.cards ?? prev.cards,
                             session: {
                                 ...(prev.session ?? {}),
@@ -125,7 +128,12 @@ export function useSession(issueId) {
                         };
 
                     case 'ended':
-                        return { ...prev, ...EMPTY, scales: prev.scales };
+                        return {
+                            ...prev,
+                            ...EMPTY,
+                            scales: prev.scales,
+                            defaultScale: prev.defaultScale ?? prev.session?.scale ?? null,
+                        };
 
                     default:
                         return prev;

@@ -4,8 +4,14 @@ import Deck from './Deck';
 import Participants from './Participants';
 import Results from './Results';
 
-function StartScreen({ scales, busy, onStart }) {
-    const [scale, setScale] = useState(scales[0]?.id ?? 'fibonacci');
+const deckLabel = ({ label, cards }) => `${label} (${cards.join(', ')})`;
+
+// Once a Jira space has used a deck, it's preselected and shown as a summary, so
+// starting is one click; "Change" brings the picker back for this session.
+function StartScreen({ scales, defaultScale, busy, onStart }) {
+    const remembered = scales.find((option) => option.id === defaultScale);
+    const [scale, setScale] = useState(remembered?.id ?? scales[0]?.id ?? 'fibonacci');
+    const [picking, setPicking] = useState(!remembered);
 
     return (
         <div className="empty">
@@ -14,31 +20,54 @@ function StartScreen({ scales, busy, onStart }) {
                 Everyone votes in private. Nobody sees a card until you reveal them.
             </p>
 
-            <div className="empty__actions">
-                <label className="field">
-                    <span className="field__label">Deck</span>
-                    <select
-                        className="field__control"
-                        value={scale}
-                        onChange={(event) => setScale(event.target.value)}
-                    >
-                        {scales.map(({ id, label, cards }) => (
-                            <option key={id} value={id}>
-                                {label} ({cards.join(', ')})
-                            </option>
-                        ))}
-                    </select>
-                </label>
+            {picking ? (
+                <div className="empty__actions">
+                    <label className="field">
+                        <span className="field__label">Deck</span>
+                        <select
+                            className="field__control"
+                            value={scale}
+                            onChange={(event) => setScale(event.target.value)}
+                        >
+                            {scales.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                    {deckLabel(option)}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
 
-                <button
-                    type="button"
-                    className="btn btn--primary"
-                    disabled={busy}
-                    onClick={() => onStart(scale)}
-                >
-                    Start session
-                </button>
-            </div>
+                    <button
+                        type="button"
+                        className="btn btn--primary"
+                        disabled={busy}
+                        onClick={() => onStart(scale)}
+                    >
+                        Start session
+                    </button>
+                </div>
+            ) : (
+                <div className="empty__actions empty__actions--center">
+                    <button
+                        type="button"
+                        className="btn btn--primary"
+                        disabled={busy}
+                        onClick={() => onStart(scale)}
+                    >
+                        Start session
+                    </button>
+                    <span className="deck-summary">
+                        Deck: {deckLabel(remembered)}
+                        <button type="button" className="link" onClick={() => setPicking(true)}>
+                            Change
+                        </button>
+                    </span>
+                </div>
+            )}
+
+            {picking && (
+                <p className="muted">The deck you start with becomes the default for this space.</p>
+            )}
         </div>
     );
 }
@@ -49,6 +78,7 @@ export default function SessionView({
     session,
     cards,
     scales,
+    defaultScale,
     votes,
     myVote,
     me,
@@ -76,7 +106,12 @@ export default function SessionView({
             )}
 
             {!session ? (
-                <StartScreen scales={scales} busy={busy} onStart={actions.start} />
+                <StartScreen
+                    scales={scales}
+                    defaultScale={defaultScale}
+                    busy={busy}
+                    onStart={actions.start}
+                />
             ) : (
                 <>
                     <header className="header">

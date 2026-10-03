@@ -6,9 +6,11 @@ import { cardsFor, DEFAULT_SCALE, isValidCard, isValidScale, scaleOptions } from
 import {
     clearVotes,
     deleteSession,
+    readDefaultDeck,
     readSession,
     readVotes,
     renewVotes,
+    writeDefaultDeck,
     writeSession,
     writeVote,
 } from '../lib/store';
@@ -37,22 +39,26 @@ export async function contextOf(req) {
         throw new Error('You need to be signed in to use Planning Poker.');
     }
 
+    // projectId identifies the Jira space, which owns the default deck.
+    const projectId = extension?.project?.id ? String(extension.project.id) : null;
+
     if (extension?.issue?.id) {
         return {
             issueId: String(extension.issue.id),
             issueKey: extension.issue.key,
+            projectId,
             accountId,
             onPage: false,
         };
     }
 
-    if (extension?.project?.id) {
+    if (projectId) {
         if (!req.payload?.issueId) {
             throw new Error('Pick an issue to estimate.');
         }
 
-        const issue = await requireIssueInProject(req.payload.issueId, extension.project.id);
-        return { ...issue, accountId, onPage: true };
+        const issue = await requireIssueInProject(req.payload.issueId, projectId);
+        return { ...issue, projectId, accountId, onPage: true };
     }
 
     throw new Error('Planning Poker must be opened from a Jira issue or project.');
@@ -69,11 +75,20 @@ async function currentUser() {
     return { name: displayName ?? 'Unknown user', avatar: avatarUrls?.['24x24'] ?? null };
 }
 
-async function buildState(issueId, accountId) {
+async function buildState(issueId, accountId, projectId) {
     const session = await readSession(issueId);
 
+    // The default deck only matters on the start screen, so it's only read then.
     if (!session) {
-        return { session: null, cards: [], votes: [], myVote: null, scales: scaleOptions() };
+        const defaultScale = projectId ? await readDefaultDeck(projectId) : null;
+        return {
+            session: null,
+            cards: [],
+            votes: [],
+            myVote: null,
+            scales: scaleOptions(),
+            defaultScale: isValidScale(defaultScale) ? defaultScale : null,
+        };
     }
 
     const votes = await readVotes(issueId);
@@ -108,18 +123,23 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'getState',
         handle(async (req) => {
-            const { issueId, issueKey, accountId } = await contextOf(req);
-            return { issueKey, me: accountId, ...(await buildState(issueId, accountId)) };
+            const { issueId, issueKey, projectId, accountId } = await contextOf(req);
+            return { issueKey, me: accountId, ...(await buildState(issueId, accountId, projectId)) };
         })
     );
 
     resolver.define(
         'startSession',
         handle(async (req) => {
-            const { issueId, accountId } = await contextOf(req);
+            const { issueId, projectId, accountId } = await contextOf(req);
             const scale = isValidScale(req.payload?.scale) ? req.payload.scale : DEFAULT_SCALE;
 
             await clearVotes(issueId);
+
+            // The deck picked here becomes the space's default for the next session.
+            if (projectId) {
+                await writeDefaultDeck(projectId, scale);
+            }
 
             const session = {
                 scale,
@@ -237,13 +257,13 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'endSession',
         handle(async (req) => {
-            const { issueId } = await contextOf(req);
+            const { issueId, projectId, accountId } = await contextOf(req);
 
             await clearVotes(issueId);
             await deleteSession(issueId);
             await broadcast(EVENTS.ENDED, { issueId });
 
-            return { session: null, cards: [], votes: [], myVote: null, scales: scaleOptions() };
+            return buildState(issueId, accountId, projectId);
         })
     );
 }
