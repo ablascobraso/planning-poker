@@ -7,6 +7,13 @@ modules:
       title: Planning Poker
       icon: resource:main;icon.svg
       viewportSize: large
+  jira:projectPage:
+    - key: planning-poker-refinement
+      resource: main
+      resolver:
+        function: resolver
+      title: Planning Poker
+      icon: resource:main;icon.svg
   function:
     - key: resolver
       handler: index.handler
@@ -17,6 +24,7 @@ permissions:
   scopes:
     - storage:app
     - read:jira-user
+    - read:jira-work
 app:
   runtime:
     name: nodejs24.x

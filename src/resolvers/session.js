@@ -1,6 +1,7 @@
 import api, { route } from '@forge/api';
 
 import { broadcast, EVENTS } from '../lib/events';
+import { requireIssueInProject } from '../lib/issues';
 import { cardsFor, DEFAULT_SCALE, isValidCard, isValidScale, scaleOptions } from '../lib/scales';
 import {
     clearVotes,
@@ -25,15 +26,36 @@ function presentVotes(votes, revealed) {
         .sort((a, b) => a.votedAt - b.votedAt);
 }
 
-function contextOf(req) {
-    const issue = req.context?.extension?.issue;
+// Works out which issue a request is about. The issue panel gets it from Jira's
+// own context, which can be trusted as-is. The refinement page sends it in the
+// payload, so it is checked against Jira (as the user) before anything happens.
+export async function contextOf(req) {
+    const extension = req.context?.extension;
     const accountId = req.context?.accountId;
 
-    if (!issue?.id || !accountId) {
-        throw new Error('This panel must be opened from a Jira issue.');
+    if (!accountId) {
+        throw new Error('You need to be signed in to use Planning Poker.');
     }
 
-    return { issueId: String(issue.id), issueKey: issue.key, accountId };
+    if (extension?.issue?.id) {
+        return {
+            issueId: String(extension.issue.id),
+            issueKey: extension.issue.key,
+            accountId,
+            onPage: false,
+        };
+    }
+
+    if (extension?.project?.id) {
+        if (!req.payload?.issueId) {
+            throw new Error('Pick an issue to estimate.');
+        }
+
+        const issue = await requireIssueInProject(req.payload.issueId, extension.project.id);
+        return { ...issue, accountId, onPage: true };
+    }
+
+    throw new Error('Planning Poker must be opened from a Jira issue or project.');
 }
 
 async function currentUser() {
@@ -73,7 +95,7 @@ async function buildState(issueId, accountId) {
 
 // Resolvers answer with a tagged result instead of throwing, because a thrown
 // error reaches Custom UI as an opaque string the panel cannot act on.
-const handle = (fn) => async (req) => {
+export const handle = (fn) => async (req) => {
     try {
         return { ok: true, ...(await fn(req)) };
     } catch (error) {
@@ -86,7 +108,7 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'getState',
         handle(async (req) => {
-            const { issueId, issueKey, accountId } = contextOf(req);
+            const { issueId, issueKey, accountId } = await contextOf(req);
             return { issueKey, me: accountId, ...(await buildState(issueId, accountId)) };
         })
     );
@@ -94,7 +116,7 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'startSession',
         handle(async (req) => {
-            const { issueId, accountId } = contextOf(req);
+            const { issueId, accountId } = await contextOf(req);
             const scale = isValidScale(req.payload?.scale) ? req.payload.scale : DEFAULT_SCALE;
 
             await clearVotes(issueId);
@@ -108,7 +130,12 @@ export function defineSessionResolvers(resolver) {
             };
             await writeSession(issueId, session);
 
-            await broadcast(EVENTS.STARTED, { round: session.round, scale, cards: cardsFor(scale) });
+            await broadcast(EVENTS.STARTED, {
+                issueId,
+                round: session.round,
+                scale,
+                cards: cardsFor(scale),
+            });
 
             return buildState(issueId, accountId);
         })
@@ -117,7 +144,7 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'castVote',
         handle(async (req) => {
-            const { issueId, accountId } = contextOf(req);
+            const { issueId, accountId } = await contextOf(req);
             const session = await readSession(issueId);
 
             if (!session) {
@@ -139,6 +166,7 @@ export function defineSessionResolvers(resolver) {
 
             // Deliberately omits the card - see presentVotes.
             await broadcast(EVENTS.VOTED, {
+                issueId,
                 round: session.round,
                 voter: { accountId, name, avatar, votedAt: Date.now() },
             });
@@ -153,7 +181,7 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'reveal',
         handle(async (req) => {
-            const { issueId, accountId } = contextOf(req);
+            const { issueId, accountId, onPage } = await contextOf(req);
             const session = await readSession(issueId);
 
             if (!session) {
@@ -169,11 +197,16 @@ export function defineSessionResolvers(resolver) {
             await writeSession(issueId, { ...session, revealed: true });
             await renewVotes(issueId, votes);
 
-            // The one moment cards become public. Sending them in the event saves
-            // every open panel a resolver round-trip just to learn the result.
+            // The one moment cards become public. An issue panel's audience is
+            // exactly the people viewing that issue, so the cards ride along in the
+            // event. A refinement page's audience is everyone on the project page,
+            // which may include people barred from this issue (issue security), so
+            // there the event only signals the reveal and each viewer fetches the
+            // cards through getState, which checks their access first.
             await broadcast(EVENTS.REVEALED, {
+                issueId,
                 round: session.round,
-                votes: presentVotes(votes, true),
+                votes: onPage ? undefined : presentVotes(votes, true),
             });
 
             return buildState(issueId, accountId);
@@ -183,7 +216,7 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'revote',
         handle(async (req) => {
-            const { issueId, accountId } = contextOf(req);
+            const { issueId, accountId } = await contextOf(req);
             const session = await readSession(issueId);
 
             if (!session) {
@@ -195,7 +228,7 @@ export function defineSessionResolvers(resolver) {
             const next = { ...session, revealed: false, round: session.round + 1 };
             await writeSession(issueId, next);
 
-            await broadcast(EVENTS.RESET, { round: next.round });
+            await broadcast(EVENTS.RESET, { issueId, round: next.round });
 
             return buildState(issueId, accountId);
         })
@@ -204,11 +237,11 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'endSession',
         handle(async (req) => {
-            const { issueId } = contextOf(req);
+            const { issueId } = await contextOf(req);
 
             await clearVotes(issueId);
             await deleteSession(issueId);
-            await broadcast(EVENTS.ENDED, {});
+            await broadcast(EVENTS.ENDED, { issueId });
 
             return { session: null, cards: [], votes: [], myVote: null, scales: scaleOptions() };
         })

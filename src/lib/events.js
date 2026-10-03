@@ -1,8 +1,9 @@
 import { publish } from '@forge/realtime';
 
-// publish() is scoped to the current module context, so a panel on issue ABC-1
-// only ever receives events published from a resolver invoked on ABC-1. That is
-// exactly the audience we want, so no signed token or custom claims are needed.
+// publish() is scoped to the module context the resolver was invoked from: an
+// issue panel event reaches only that issue's panels, and a refinement page event
+// reaches only that project's refinement pages. The two never see each other's
+// events, so page events carry the issueId and page clients filter on it.
 const CHANNEL = 'planning-poker';
 
 export const EVENTS = {
@@ -11,6 +12,7 @@ export const EVENTS = {
     REVEALED: 'revealed',
     RESET: 'reset',
     ENDED: 'ended',
+    FOCUS: 'focus',
 };
 
 // A failed broadcast must not fail the user's action: by the time we publish, the

@@ -321,3 +321,129 @@ body {
     cursor: pointer;
     padding: 0 4px;
 }
+
+/* Refinement page: issue list beside the focused issue's session */
+.refinement {
+    display: grid;
+    grid-template-columns: minmax(240px, 340px) minmax(0, 1fr);
+    gap: 24px;
+    padding: 16px;
+    align-items: start;
+}
+
+.refinement__error {
+    grid-column: 1 / -1;
+}
+
+.refinement__list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.refinement__session {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+}
+
+@media (max-width: 720px) {
+    .refinement {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.issues {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.issue {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+        'key status'
+        'summary summary';
+    gap: 2px 8px;
+    padding: 8px 10px;
+    border: none;
+    border-left: 3px solid transparent;
+    border-radius: var(--pp-radius);
+    background: none;
+    color: var(--pp-text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.issue:hover {
+    background: var(--pp-surface-raised);
+}
+
+.issue--active {
+    background: var(--pp-surface-raised);
+    border-left-color: var(--pp-accent);
+}
+
+.issue__key {
+    grid-area: key;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--pp-subtle);
+}
+
+.issue__status {
+    grid-area: status;
+    justify-self: end;
+    font-size: 11px;
+    color: var(--pp-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.issue__summary {
+    grid-area: summary;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.current {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--pp-border);
+}
+
+.current__info {
+    min-width: 0;
+}
+
+.current__key {
+    border: none;
+    background: none;
+    padding: 0;
+    color: var(--pp-accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.current__key:hover {
+    text-decoration: underline;
+}
+
+.current__summary {
+    margin: 2px 0 0;
+    font-size: 18px;
+    font-weight: 600;
+}

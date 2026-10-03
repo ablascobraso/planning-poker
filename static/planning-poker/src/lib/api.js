@@ -13,9 +13,19 @@ async function call(name, payload) {
     return data;
 }
 
-export const getState = () => call('getState');
-export const startSession = (scale) => call('startSession', { scale });
-export const castVote = (card) => call('castVote', { card });
-export const reveal = () => call('reveal');
-export const revote = () => call('revote');
-export const endSession = () => call('endSession');
+// Session calls for one issue. In the issue panel issueId is undefined and the
+// backend uses the panel's own issue; on the refinement page it names the issue
+// being estimated (and the backend checks the user may access it).
+export function sessionApi(issueId) {
+    return {
+        getState: () => call('getState', { issueId }),
+        startSession: (scale) => call('startSession', { issueId, scale }),
+        castVote: (card) => call('castVote', { issueId, card }),
+        reveal: () => call('reveal', { issueId }),
+        revote: () => call('revote', { issueId }),
+        endSession: () => call('endSession', { issueId }),
+    };
+}
+
+export const getRefinement = () => call('getRefinement');
+export const setFocus = (issueId) => call('setFocus', { issueId });

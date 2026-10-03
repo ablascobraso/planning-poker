@@ -8,6 +8,7 @@ import { kvs, WhereConditions } from '@forge/kvs';
 // session object would silently drop votes whenever two people voted at the same
 // moment - which in planning poker is the normal case, not an edge case.
 const sessionKey = (issueId) => `pp:s:${issueId}`;
+const focusKey = (projectId) => `pp:f:${projectId}`;
 const voteKey = (issueId, accountId) => `pp:v:${issueId}:${accountId}`;
 const votePrefix = (issueId) => `pp:v:${issueId}:`;
 
@@ -35,6 +36,22 @@ export async function readSession(issueId) {
 
 export async function writeSession(issueId, session) {
     await kvs.set(sessionKey(issueId), { ...session, updatedAt: Date.now() }, EXPIRY);
+}
+
+// The issue a project's refinement page is currently estimating, shared so that
+// everyone on the page moves to the next issue together.
+export async function readFocus(projectId) {
+    const focus = await kvs.get(focusKey(projectId));
+
+    if (!focus || Date.now() - focus.updatedAt > LIFETIME_MS) {
+        return null;
+    }
+
+    return focus;
+}
+
+export async function writeFocus(projectId, issueId) {
+    await kvs.set(focusKey(projectId), { issueId, updatedAt: Date.now() }, EXPIRY);
 }
 
 export async function deleteSession(issueId) {

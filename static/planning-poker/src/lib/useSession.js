@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { realtime } from '@forge/bridge';
 
-import * as api from './api';
+import { sessionApi } from './api';
 
-const CHANNEL = 'planning-poker';
+export const CHANNEL = 'planning-poker';
 
 const EMPTY = {
     session: null,
@@ -13,7 +13,11 @@ const EMPTY = {
     myVote: null,
 };
 
-export function useSession() {
+// State and actions for one issue's session. Pass an issueId on the refinement
+// page; leave it out in the issue panel. The hook assumes issueId never changes
+// for its lifetime - the page remounts it (via `key`) when moving to another issue.
+export function useSession(issueId) {
+    const api = useMemo(() => sessionApi(issueId), [issueId]);
     const [state, setState] = useState({ ...EMPTY, issueKey: null, me: null });
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
@@ -38,7 +42,7 @@ export function useSession() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [api]);
 
     // Wraps the one-off actions so every button gets the same busy/error handling.
     const run = useCallback(async (action) => {
@@ -66,10 +70,18 @@ export function useSession() {
                 return;
             }
 
-            // An event for a different round means this panel missed something;
-            // pull a fresh snapshot rather than patching stale state.
+            // A refinement page hears events for every issue in the project.
+            if (issueId && payload.issueId !== issueId) {
+                return;
+            }
+
+            // An event for a different round means this view missed something, and
+            // a reveal without cards (refinement page) means each viewer must fetch
+            // them through the access-checked getState. Either way, pull a snapshot.
             const roundScoped = payload.type === 'voted' || payload.type === 'revealed';
-            if (roundScoped && payload.round !== roundRef.current) {
+            const staleRound = roundScoped && payload.round !== roundRef.current;
+            const cardsWithheld = payload.type === 'revealed' && !payload.votes;
+            if (staleRound || cardsWithheld) {
                 refresh();
                 return;
             }
@@ -100,7 +112,7 @@ export function useSession() {
                     case 'revealed':
                         return {
                             ...prev,
-                            votes: payload.votes ?? prev.votes,
+                            votes: payload.votes,
                             session: { ...prev.session, revealed: true },
                         };
 
@@ -138,7 +150,7 @@ export function useSession() {
             active = false;
             subscription?.unsubscribe();
         };
-    }, [refresh]);
+    }, [refresh, issueId]);
 
     const actions = {
         start: (scale) => run(() => api.startSession(scale)),
