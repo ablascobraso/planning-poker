@@ -720,3 +720,66 @@ body {
     color: var(--pp-selected-text);
     vertical-align: 1px;
 }
+
+/* Earlier rounds of this session, under the current one */
+.history {
+    border-top: 1px solid var(--pp-border);
+    padding-top: 16px;
+}
+
+.history__rounds {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.history__round {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding: 6px 8px;
+    border-radius: var(--pp-radius);
+    background: var(--pp-surface-raised);
+}
+
+.history__label {
+    min-width: 64px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--pp-subtle);
+}
+
+.history__cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1;
+}
+
+.history__card {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+    padding: 2px 8px;
+    border: 1px solid var(--pp-border);
+    border-radius: var(--pp-radius);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: default;
+}
+
+.history__count {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--pp-subtle);
+}
+
+.history__outcome {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}

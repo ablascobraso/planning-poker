@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import Deck from './Deck';
 import Participants from './Participants';
 import Results from './Results';
+import RoundHistory from './RoundHistory';
 
 const deckLabel = ({ label, cards }) => `${label} (${cards.join(', ')})`;
 
@@ -174,6 +175,7 @@ export default function SessionView({
     defaultLed,
     votes,
     myVote,
+    history,
     me,
     loading,
     busy,
@@ -323,6 +325,8 @@ export default function SessionView({
                     </section>
 
                     {revealed && <Results votes={votes} />}
+
+                    <RoundHistory history={history} currentRound={session.round} />
                 </>
             )}
         </div>

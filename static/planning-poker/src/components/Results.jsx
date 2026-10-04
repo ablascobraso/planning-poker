@@ -2,15 +2,20 @@ import React, { useMemo } from 'react';
 
 const cardValue = (card) => (card === '½' ? 0.5 : Number(card));
 
-function summarise(votes) {
+// Counts the cards of one round: which cards, how often, and who played each.
+// Shared with RoundHistory so earlier rounds read exactly like the current one.
+export function summarise(votes) {
     const tally = new Map();
 
-    for (const { card } of votes) {
-        tally.set(card, (tally.get(card) ?? 0) + 1);
+    for (const { card, name } of votes) {
+        const entry = tally.get(card) ?? { count: 0, names: [] };
+        entry.count += 1;
+        entry.names.push(name ?? 'Unknown user');
+        tally.set(card, entry);
     }
 
     const distribution = [...tally.entries()]
-        .map(([card, count]) => ({ card, count }))
+        .map(([card, { count, names }]) => ({ card, count, names }))
         .sort((a, b) => b.count - a.count || a.card.localeCompare(b.card));
 
     const numbers = votes.map(({ card }) => cardValue(card)).filter(Number.isFinite);
@@ -40,8 +45,8 @@ export default function Results({ votes }) {
             </div>
 
             <div className="distribution">
-                {distribution.map(({ card, count }) => (
-                    <div key={card} className="distribution__item">
+                {distribution.map(({ card, count, names }) => (
+                    <div key={card} className="distribution__item" title={names.join(', ')}>
                         <span className="distribution__card">{card}</span>
                         <span className="distribution__count">
                             {count} {count === 1 ? 'vote' : 'votes'}

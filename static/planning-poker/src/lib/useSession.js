@@ -24,6 +24,8 @@ const EMPTY = {
     scales: [],
     votes: [],
     myVote: null,
+    // Earlier revealed rounds of this session, oldest first (see session.js).
+    history: [],
     defaultScale: null,
     defaultLed: false,
 };
@@ -163,12 +165,20 @@ export function useSession(issueId) {
                         return { ...prev, votes: [...others, payload.voter] };
                     }
 
-                    case 'revealed':
+                    case 'revealed': {
+                        // The just-revealed round joins the history (replacing
+                        // it, should the same round be revealed twice).
+                        const entry = payload.historyEntry;
+                        const history = entry
+                            ? [...prev.history.filter((past) => past.round !== entry.round), entry]
+                            : prev.history;
                         return {
                             ...prev,
                             votes: payload.votes,
+                            history,
                             session: { ...prev.session, revealed: true },
                         };
+                    }
 
                     case 'reset':
                         return {

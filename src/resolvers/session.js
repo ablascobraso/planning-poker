@@ -28,6 +28,30 @@ function presentVotes(votes, revealed) {
         .sort((a, b) => a.votedAt - b.votedAt);
 }
 
+// ROUND HISTORY. When a round is revealed, its cards are recorded on the session
+// so the team can see how estimates moved between rounds ("Round 1: 3, 5, 8 ->
+// Round 2: 5, 5, 5"). Only revealed rounds are recorded, so this never exposes
+// a card before its reveal. It lives inside the session record - no extra
+// storage reads or writes - and so it expires with the session and is cleared
+// by End or by starting a new session.
+const MAX_HISTORY = 20;
+
+function historyEntry(round, votes) {
+    return {
+        round,
+        votes: [...votes]
+            .sort((a, b) => a.votedAt - b.votedAt)
+            .map(({ accountId, name, card }) => ({ accountId, name, card })),
+    };
+}
+
+// Adds (or, if the round is revealed twice, replaces) a round's entry.
+function withRound(history, entry) {
+    return [...(history ?? []).filter((past) => past.round !== entry.round), entry]
+        .sort((a, b) => a.round - b.round)
+        .slice(-MAX_HISTORY);
+}
+
 // Works out which issue a request is about. The issue panel gets it from Jira's
 // own context, which can be trusted as-is. The refinement page sends it in the
 // payload, so it is checked against Jira (as the user) before anything happens.
@@ -109,6 +133,7 @@ async function buildState(issueId, accountId, projectId) {
             votes: [],
             myVote: null,
             scales: scaleOptions(),
+            history: [],
             defaultScale: isValidScale(defaults.scale) ? defaults.scale : null,
             defaultLed: defaults.led,
         };
@@ -129,6 +154,8 @@ async function buildState(issueId, accountId, projectId) {
         },
         cards: cardsFor(session.scale),
         scales: scaleOptions(),
+        // Sessions saved before round history existed simply have none.
+        history: session.history ?? [],
         votes: presentVotes(votes, session.revealed),
         myVote: votes.find((vote) => vote.accountId === accountId)?.card ?? null,
     };
@@ -137,7 +164,12 @@ async function buildState(issueId, accountId, projectId) {
 // Flips the round to revealed and announces it. Shared by the Reveal button and by
 // auto-reveal, which differ only in the checks they run beforehand.
 async function revealRound({ issueId, accountId }, session, votes) {
-    await writeSession(issueId, { ...session, revealed: true });
+    const entry = historyEntry(session.round, votes);
+    await writeSession(issueId, {
+        ...session,
+        revealed: true,
+        history: withRound(session.history, entry),
+    });
     await renewVotes(issueId, votes);
 
     // The one moment cards become public. They ride along in the event because
@@ -146,6 +178,7 @@ async function revealRound({ issueId, accountId }, session, votes) {
     await broadcastToIssue(issueId, EVENTS.REVEALED, {
         round: session.round,
         votes: presentVotes(votes, true),
+        historyEntry: entry,
     });
 
     return buildState(issueId, accountId);
@@ -225,6 +258,8 @@ export function defineSessionResolvers(resolver) {
                 facilitator: accountId,
                 facilitatorName,
                 startedAt: Date.now(),
+                // A new session starts a new history.
+                history: [],
             };
             await writeSession(issueId, session);
 
