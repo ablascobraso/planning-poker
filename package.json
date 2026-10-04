@@ -1,9 +1,8 @@
 {
   "name": "planning-poker",
   "title": "Planning Poker for Jira",
-  "description": "Private planning poker voting on Jira issues, with live reveal and story point saving.",
+  "description": "Private, real-time planning poker for Jira Cloud: estimate from an issue or a refinement page, with live presence, auto-reveal, round history and optional facilitator controls.",
   "version": "0.1.0",
-  "main": "index.js",
   "license": "MIT",
   "private": true,
   "scripts": {
