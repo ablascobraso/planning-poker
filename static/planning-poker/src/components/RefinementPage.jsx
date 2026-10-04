@@ -107,8 +107,11 @@ export default function RefinementPage() {
         if (result) {
             setQueue(result.queue);
             setPicking(false);
-            // Starting from an empty page, jump straight to the first new issue.
-            if (!focusId && result.queue.length > 0) {
+            // If nothing in the queue was being estimated - a fresh page, or the
+            // focused issue has since been removed from the queue - start with
+            // the first issue in it.
+            const focusQueued = result.queue.some((issue) => issue.id === focusId);
+            if (!focusQueued && result.queue.length > 0) {
                 focusOn(result.queue[0].id);
             }
         }
@@ -140,6 +143,9 @@ export default function RefinementPage() {
         return <div className="shell shell--centered muted">Loading queue…</div>;
     }
 
+    // The shared focus is stored apart from the queue, so it can point at an issue
+    // that has since been removed (or that this viewer can't see). Only an issue
+    // that's actually in the queue counts as the one being estimated.
     const index = queue.findIndex((issue) => issue.id === focusId);
     const current = index >= 0 ? queue[index] : null;
     const next = index >= 0 ? queue[index + 1] : null;
@@ -170,7 +176,7 @@ export default function RefinementPage() {
             );
         }
 
-        if (!focusId) {
+        if (!current) {
             return (
                 <div className="empty">
                     <h2 className="empty__title">Pick an issue to start</h2>
@@ -183,18 +189,14 @@ export default function RefinementPage() {
             <>
                 <div className="current">
                     <div className="current__info">
-                        {current && (
-                            <button
-                                type="button"
-                                className="current__key"
-                                onClick={() => router.open(`/browse/${current.key}`)}
-                            >
-                                {current.key}
-                            </button>
-                        )}
-                        <h2 className="current__summary">
-                            {current?.summary ?? 'This issue is no longer in the queue'}
-                        </h2>
+                        <button
+                            type="button"
+                            className="current__key"
+                            onClick={() => router.open(`/browse/${current.key}`)}
+                        >
+                            {current.key}
+                        </button>
+                        <h2 className="current__summary">{current.summary}</h2>
                     </div>
                     {next && (
                         <button type="button" className="btn" onClick={() => focusOn(next.id)}>
