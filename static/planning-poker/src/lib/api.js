@@ -22,6 +22,9 @@ export function sessionApi(issueId) {
         startSession: (scale) => call('startSession', { issueId, scale }),
         castVote: (card) => call('castVote', { issueId, card }),
         reveal: () => call('reveal', { issueId }),
+        // round and accountIds describe what this browser saw: everyone in the
+        // room (accountIds) has voted in this round. The server re-checks both.
+        autoReveal: (round, accountIds) => call('autoReveal', { issueId, round, accountIds }),
         revote: () => call('revote', { issueId }),
         endSession: () => call('endSession', { issueId }),
     };

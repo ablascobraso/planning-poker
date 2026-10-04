@@ -164,6 +164,7 @@ export function useSession(issueId) {
         start: (scale) => run(() => api.startSession(scale)),
         vote: (card) => run(() => api.castVote(card)),
         reveal: () => run(api.reveal),
+        autoReveal: (round, accountIds) => run(() => api.autoReveal(round, accountIds)),
         revote: () => run(api.revote),
         end: () => run(api.endSession),
     };

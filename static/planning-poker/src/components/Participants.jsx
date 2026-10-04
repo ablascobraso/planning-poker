@@ -1,31 +1,79 @@
 import React from 'react';
 
-function Avatar({ voter }) {
-    if (voter.avatar) {
-        return <img className="voter__avatar" src={voter.avatar} alt="" />;
+function Avatar({ person }) {
+    if (person.avatar) {
+        return <img className="voter__avatar" src={person.avatar} alt="" />;
     }
 
-    const initial = (voter.name ?? '?').trim().charAt(0).toUpperCase();
+    const initial = (person.name ?? '?').trim().charAt(0).toUpperCase();
     return <span className="voter__avatar voter__avatar--fallback">{initial}</span>;
 }
 
-export default function Participants({ votes, me, revealed }) {
-    if (votes.length === 0) {
+// While a round is open, everyone here is listed - whether or not they've voted -
+// plus anyone who voted and then left. Names are sorted so every viewer sees the
+// same order, and rows don't jump around as people vote.
+function openRoundRows(votes, present, presenceReady) {
+    const rows = new Map();
+
+    for (const person of present) {
+        rows.set(person.accountId, { ...person, voted: false, away: false });
+    }
+
+    for (const vote of votes) {
+        const here = rows.get(vote.accountId);
+        rows.set(vote.accountId, {
+            ...(here ?? vote),
+            voted: true,
+            // Only claim someone left once presence is actually working.
+            away: presenceReady && !here,
+        });
+    }
+
+    return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function Status({ row, revealed }) {
+    if (revealed) {
+        return <span className="voter__card">{row.card}</span>;
+    }
+
+    if (row.voted) {
+        return (
+            <span className="voter__card voter__card--hidden" title="Voted">
+                ✓
+            </span>
+        );
+    }
+
+    return (
+        <span className="voter__card voter__card--waiting" title="Hasn't voted yet">
+            …
+        </span>
+    );
+}
+
+export default function Participants({ votes, present, presenceReady, me, revealed }) {
+    // Once revealed, the votes are what matter, in the order they were cast.
+    const rows = revealed ? votes : openRoundRows(votes, present, presenceReady);
+
+    if (rows.length === 0) {
         return <p className="muted">No votes yet.</p>;
     }
 
     return (
         <ul className="voters">
-            {votes.map((voter) => (
-                <li key={voter.accountId} className="voter">
-                    <Avatar voter={voter} />
+            {rows.map((row) => (
+                <li
+                    key={row.accountId}
+                    className={`voter${row.away ? ' voter--away' : ''}`}
+                    title={row.away ? 'Voted, then left this session' : undefined}
+                >
+                    <Avatar person={row} />
                     <span className="voter__name">
-                        {voter.name}
-                        {voter.accountId === me ? ' (you)' : ''}
+                        {row.name}
+                        {row.accountId === me ? ' (you)' : ''}
                     </span>
-                    <span className={`voter__card${revealed ? '' : ' voter__card--hidden'}`}>
-                        {revealed ? voter.card : '✓'}
-                    </span>
+                    <Status row={row} revealed={revealed} />
                 </li>
             ))}
         </ul>

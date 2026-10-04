@@ -196,6 +196,35 @@ body {
     color: var(--pp-subtle);
 }
 
+/* Here, but no card picked yet */
+.voter__card--waiting {
+    color: var(--pp-subtle);
+    font-weight: 400;
+}
+
+/* Voted, then closed the session */
+.voter--away {
+    opacity: 0.55;
+}
+
+/* Status line under the header: waiting for / auto-reveal countdown */
+.round-status {
+    margin-top: -8px;
+    font-size: 13px;
+}
+
+.round-status--go {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: -8px;
+    padding: 8px 12px;
+    border-radius: var(--pp-radius);
+    background: var(--pp-ok-bg);
+    color: var(--pp-ok-text);
+}
+
 /* Results */
 .results {
     display: flex;

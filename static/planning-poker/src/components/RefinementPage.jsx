@@ -2,12 +2,17 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { realtime, router } from '@forge/bridge';
 
 import * as api from '../lib/api';
+import { useAutoReveal } from '../lib/useAutoReveal';
+import { usePresence } from '../lib/usePresence';
 import { CHANNEL, useSession } from '../lib/useSession';
 import IssuePicker from './IssuePicker';
 import SessionView from './SessionView';
 
-function FocusedSession({ issueId }) {
-    return <SessionView {...useSession(issueId)} />;
+function FocusedSession({ issueId, presence }) {
+    const state = useSession(issueId);
+    const autoReveal = useAutoReveal(state, presence, issueId);
+
+    return <SessionView {...state} presence={presence} autoReveal={autoReveal} />;
 }
 
 const CONFIRM_WINDOW_MS = 3000;
@@ -23,6 +28,12 @@ export default function RefinementPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const clearTimer = useRef(null);
+
+    // Presence belongs to the page, not to each issue: whoever has the page open
+    // is in the meeting. Moving to the next issue therefore doesn't make the
+    // whole room leave and re-announce itself, which in a big meeting could brush
+    // against Forge's realtime rate limit.
+    const presence = usePresence(true);
 
     const load = useCallback(async () => {
         try {
@@ -191,7 +202,7 @@ export default function RefinementPage() {
                         </button>
                     )}
                 </div>
-                <FocusedSession key={focusId} issueId={focusId} />
+                <FocusedSession key={focusId} issueId={focusId} presence={presence} />
             </>
         );
     };

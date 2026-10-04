@@ -108,6 +108,40 @@ async function buildState(issueId, accountId, projectId) {
     };
 }
 
+// Flips the round to revealed and announces it. Shared by the Reveal button and by
+// auto-reveal, which differ only in the checks they run beforehand.
+async function revealRound({ issueId, accountId, onPage }, session, votes) {
+    await writeSession(issueId, { ...session, revealed: true });
+    await renewVotes(issueId, votes);
+
+    // The one moment cards become public. An issue panel's audience is exactly
+    // the people viewing that issue, so the cards ride along in the event. A
+    // refinement page's audience is everyone on the project page, which may
+    // include people barred from this issue (issue security), so there the event
+    // only signals the reveal and each viewer fetches the cards through
+    // getState, which checks their access first.
+    await broadcast(EVENTS.REVEALED, {
+        issueId,
+        round: session.round,
+        votes: onPage ? undefined : presentVotes(votes, true),
+    });
+
+    return buildState(issueId, accountId);
+}
+
+// Atlassian account ids are short strings of letters, digits, ':' and '-'.
+// Anything else in an auto-reveal request is ignored rather than trusted.
+const MAX_ROOM_SIZE = 100;
+function accountIdsFrom(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .filter((id) => typeof id === 'string' && /^[\w:-]{1,128}$/.test(id))
+        .slice(0, MAX_ROOM_SIZE);
+}
+
 // Resolvers answer with a tagged result instead of throwing, because a thrown
 // error reaches Custom UI as an opaque string the panel cannot act on.
 export const handle = (fn) => async (req) => {
@@ -201,35 +235,52 @@ export function defineSessionResolvers(resolver) {
     resolver.define(
         'reveal',
         handle(async (req) => {
-            const { issueId, accountId, onPage } = await contextOf(req);
-            const session = await readSession(issueId);
+            const context = await contextOf(req);
+            const session = await readSession(context.issueId);
 
             if (!session) {
                 throw new Error('There is no session to reveal.');
             }
 
-            const votes = await readVotes(issueId);
+            const votes = await readVotes(context.issueId);
 
             if (votes.length === 0) {
                 throw new Error('Nobody has voted yet.');
             }
 
-            await writeSession(issueId, { ...session, revealed: true });
-            await renewVotes(issueId, votes);
+            return revealRound(context, session, votes);
+        })
+    );
 
-            // The one moment cards become public. An issue panel's audience is
-            // exactly the people viewing that issue, so the cards ride along in the
-            // event. A refinement page's audience is everyone on the project page,
-            // which may include people barred from this issue (issue security), so
-            // there the event only signals the reveal and each viewer fetches the
-            // cards through getState, which checks their access first.
-            await broadcast(EVENTS.REVEALED, {
-                issueId,
-                round: session.round,
-                votes: onPage ? undefined : presentVotes(votes, true),
-            });
+    // Sent by a browser that saw everyone in the room vote (see useAutoReveal).
+    // Its view can be a moment out of date - a new round may have just started,
+    // or the round may already be revealed - so the claim is re-checked against
+    // storage, and if it no longer holds this quietly does nothing instead of
+    // failing. It grants nothing the Reveal button doesn't already: anyone in a
+    // session can reveal it.
+    resolver.define(
+        'autoReveal',
+        handle(async (req) => {
+            const context = await contextOf(req);
+            const { issueId, accountId, projectId } = context;
+            const expected = accountIdsFrom(req.payload?.accountIds);
+            const session = await readSession(issueId);
 
-            return buildState(issueId, accountId);
+            const stillOpen =
+                session && !session.revealed && session.round === req.payload?.round;
+
+            if (!stillOpen || expected.length === 0) {
+                return buildState(issueId, accountId, projectId);
+            }
+
+            const votes = await readVotes(issueId);
+            const voted = new Set(votes.map((vote) => vote.accountId));
+
+            if (!expected.every((id) => voted.has(id))) {
+                return buildState(issueId, accountId, projectId);
+            }
+
+            return revealRound(context, session, votes);
         })
     );
 
