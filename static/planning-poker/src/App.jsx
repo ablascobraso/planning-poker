@@ -17,8 +17,13 @@ function IssuePanel() {
     // That keeps realtime traffic in line with actual estimating rather than
     // with general Jira browsing.
     const session = state.session;
-    const presence = usePresence(Boolean(session) && (!session.revealed || session.led === true));
-    const autoReveal = useAutoReveal(state, presence);
+    const presence = usePresence(
+        Boolean(session) && (!session.revealed || session.led === true),
+        state.issueId
+    );
+    // The issue id ties "who's here" and auto-reveal holds to this issue, since
+    // they're shared with the refinement page across the whole project.
+    const autoReveal = useAutoReveal(state, presence, state.issueId);
 
     return <SessionView {...state} presence={presence} autoReveal={autoReveal} />;
 }

@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { realtime } from '@forge/bridge';
+import { Jira, realtime } from '@forge/bridge';
 
 import { sessionApi } from './api';
 
-export const CHANNEL = 'planning-poker';
+// The refinement page's own channel (queue, current issue). See events.js.
+export const PAGE_CHANNEL = 'planning-poker';
+
+// An issue's session events reach every view of that issue - its issue panel
+// and the refinement page - because the channel is scoped to the Jira project
+// and narrowed to the issue by a listen-only token from getState. The scope
+// must match the backend's exactly (events.js), or nothing arrives.
+const SESSION_CHANNEL = 'planning-poker-session';
+const SESSION_SCOPE = { contextOverrides: [Jira.Project] };
+
+// Tokens expire, so a fresh one is fetched (with a fresh snapshot) this long
+// before that. If fetching one fails, it's retried after RETRY_TOKEN_MS.
+const RENEW_BEFORE_MS = 60 * 1000;
+const RETRY_TOKEN_MS = 30 * 1000;
 
 const EMPTY = {
     session: null,
@@ -34,9 +47,27 @@ export function useSession(issueId) {
         roundRef.current = round;
     }, [round]);
 
+    // The live-update token: kept in a ref so refresh() can tell whether a new
+    // one is needed, mirrored in state so the subscription follows changes.
+    const liveRef = useRef(null);
+    const [live, setLive] = useState(null);
+    const retryTimer = useRef(null);
+
     const refresh = useCallback(async () => {
+        const current = liveRef.current;
+        const needsToken = !current || current.expiresAt * 1000 - Date.now() < RENEW_BEFORE_MS;
+
         try {
-            const data = await api.getState();
+            const { live: fresh, ...data } = await api.getState(needsToken);
+
+            if (fresh) {
+                liveRef.current = fresh;
+                setLive(fresh);
+            } else if (needsToken) {
+                clearTimeout(retryTimer.current);
+                retryTimer.current = setTimeout(refresh, RETRY_TOKEN_MS);
+            }
+
             setState((prev) => ({ ...prev, ...EMPTY, ...data }));
             setError(null);
         } catch (err) {
@@ -45,6 +76,19 @@ export function useSession(issueId) {
             setLoading(false);
         }
     }, [api]);
+
+    // Renews the token shortly before it expires.
+    useEffect(() => {
+        if (!live?.expiresAt) {
+            return undefined;
+        }
+
+        const wait = Math.max(live.expiresAt * 1000 - Date.now() - RENEW_BEFORE_MS, RETRY_TOKEN_MS);
+        const timer = setTimeout(refresh, wait);
+        return () => clearTimeout(timer);
+    }, [live, refresh]);
+
+    useEffect(() => () => clearTimeout(retryTimer.current), []);
 
     // Wraps the one-off actions so every button gets the same busy/error handling.
     const run = useCallback(async (action) => {
@@ -72,14 +116,15 @@ export function useSession(issueId) {
                 return;
             }
 
-            // A refinement page hears events for every issue in the project.
+            // The token already limits events to this issue; this is a cheap
+            // safety net on the refinement page, which names its issue.
             if (issueId && payload.issueId !== issueId) {
                 return;
             }
 
-            // An event for a different round means this view missed something, and
-            // a reveal without cards (refinement page) means each viewer must fetch
-            // them through the access-checked getState. Either way, pull a snapshot.
+            // An event for a different round means this view missed something,
+            // and a reveal without cards can only come from an older version of
+            // the app. Either way, pull a fresh snapshot.
             const roundScoped = payload.type === 'voted' || payload.type === 'revealed';
             const staleRound = roundScoped && payload.round !== roundRef.current;
             const cardsWithheld = payload.type === 'revealed' && !payload.votes;
@@ -162,11 +207,16 @@ export function useSession(issueId) {
             });
         };
 
+        // Nothing to listen with until getState has handed out a token.
+        if (!live?.token) {
+            return undefined;
+        }
+
         let active = true;
         let subscription;
 
         realtime
-            .subscribe(CHANNEL, onEvent)
+            .subscribe(SESSION_CHANNEL, onEvent, { ...SESSION_SCOPE, token: live.token })
             .then((sub) => {
                 subscription = sub;
                 if (!active) {
@@ -179,7 +229,7 @@ export function useSession(issueId) {
             active = false;
             subscription?.unsubscribe();
         };
-    }, [refresh, issueId]);
+    }, [refresh, issueId, live]);
 
     const actions = {
         start: (scale, led) => run(() => api.startSession(scale, led)),

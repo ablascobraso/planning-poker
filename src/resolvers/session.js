@@ -1,6 +1,6 @@
 import api, { route } from '@forge/api';
 
-import { broadcast, EVENTS } from '../lib/events';
+import { broadcastToIssue, EVENTS, sessionToken } from '../lib/events';
 import { requireIssueInProject } from '../lib/issues';
 import { cardsFor, DEFAULT_SCALE, isValidCard, isValidScale, scaleOptions } from '../lib/scales';
 import {
@@ -48,7 +48,6 @@ export async function contextOf(req) {
             issueKey: extension.issue.key,
             projectId,
             accountId,
-            onPage: false,
         };
     }
 
@@ -58,7 +57,7 @@ export async function contextOf(req) {
         }
 
         const issue = await requireIssueInProject(req.payload.issueId, projectId);
-        return { ...issue, projectId, accountId, onPage: true };
+        return { ...issue, projectId, accountId };
     }
 
     throw new Error('Planning Poker must be opened from a Jira issue or project.');
@@ -137,20 +136,16 @@ async function buildState(issueId, accountId, projectId) {
 
 // Flips the round to revealed and announces it. Shared by the Reveal button and by
 // auto-reveal, which differ only in the checks they run beforehand.
-async function revealRound({ issueId, accountId, onPage }, session, votes) {
+async function revealRound({ issueId, accountId }, session, votes) {
     await writeSession(issueId, { ...session, revealed: true });
     await renewVotes(issueId, votes);
 
-    // The one moment cards become public. An issue panel's audience is exactly
-    // the people viewing that issue, so the cards ride along in the event. A
-    // refinement page's audience is everyone on the project page, which may
-    // include people barred from this issue (issue security), so there the event
-    // only signals the reveal and each viewer fetches the cards through
-    // getState, which checks their access first.
-    await broadcast(EVENTS.REVEALED, {
-        issueId,
+    // The one moment cards become public. They ride along in the event because
+    // only people who passed the access check for this issue hold a token to
+    // hear it (see events.js), in the issue panel and the refinement page alike.
+    await broadcastToIssue(issueId, EVENTS.REVEALED, {
         round: session.round,
-        votes: onPage ? undefined : presentVotes(votes, true),
+        votes: presentVotes(votes, true),
     });
 
     return buildState(issueId, accountId);
@@ -185,7 +180,18 @@ export function defineSessionResolvers(resolver) {
         'getState',
         handle(async (req) => {
             const { issueId, issueKey, projectId, accountId } = await contextOf(req);
-            return { issueKey, me: accountId, ...(await buildState(issueId, accountId, projectId)) };
+
+            // The browser asks for a live-update token only when it needs one (on
+            // first load, or when its token is about to expire): signing counts
+            // toward Forge's realtime rate limit. The access check above has
+            // already passed, so it may listen to this issue's events.
+            const withToken = req.payload?.withToken === true;
+            const [state, live] = await Promise.all([
+                buildState(issueId, accountId, projectId),
+                withToken ? sessionToken(issueId) : null,
+            ]);
+
+            return { issueId, issueKey, me: accountId, ...state, ...(withToken ? { live } : {}) };
         })
     );
 
@@ -222,8 +228,7 @@ export function defineSessionResolvers(resolver) {
             };
             await writeSession(issueId, session);
 
-            await broadcast(EVENTS.STARTED, {
-                issueId,
+            await broadcastToIssue(issueId, EVENTS.STARTED, {
                 round: session.round,
                 scale,
                 cards: cardsFor(scale),
@@ -260,8 +265,7 @@ export function defineSessionResolvers(resolver) {
             await writeVote(issueId, accountId, { card, name, avatar, votedAt: Date.now() });
 
             // Deliberately omits the card - see presentVotes.
-            await broadcast(EVENTS.VOTED, {
-                issueId,
+            await broadcastToIssue(issueId, EVENTS.VOTED, {
                 round: session.round,
                 voter: { accountId, name, avatar, votedAt: Date.now() },
             });
@@ -348,7 +352,7 @@ export function defineSessionResolvers(resolver) {
             const next = { ...session, revealed: false, round: session.round + 1 };
             await writeSession(issueId, next);
 
-            await broadcast(EVENTS.RESET, { issueId, round: next.round });
+            await broadcastToIssue(issueId, EVENTS.RESET, { round: next.round });
 
             return buildState(issueId, accountId);
         })
@@ -363,7 +367,7 @@ export function defineSessionResolvers(resolver) {
 
             await clearVotes(issueId);
             await deleteSession(issueId);
-            await broadcast(EVENTS.ENDED, { issueId });
+            await broadcastToIssue(issueId, EVENTS.ENDED);
 
             return buildState(issueId, accountId, projectId);
         })
@@ -395,7 +399,10 @@ export function defineSessionResolvers(resolver) {
             // reveal or a new round, but in a led session only the facilitator -
             // who is gone - can do those.
             await writeSession(issueId, { ...session, facilitator: accountId, facilitatorName: name });
-            await broadcast(EVENTS.LEAD, { issueId, facilitator: accountId, facilitatorName: name });
+            await broadcastToIssue(issueId, EVENTS.LEAD, {
+                facilitator: accountId,
+                facilitatorName: name,
+            });
 
             return buildState(issueId, accountId);
         })

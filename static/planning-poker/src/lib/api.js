@@ -18,7 +18,8 @@ async function call(name, payload) {
 // being estimated (and the backend checks the user may access it).
 export function sessionApi(issueId) {
     return {
-        getState: () => call('getState', { issueId }),
+        // withToken: also return a live-update token (see useSession).
+        getState: (withToken = false) => call('getState', { issueId, withToken }),
         // led: only the person starting the session may then reveal and move on.
         startSession: (scale, led) => call('startSession', { issueId, scale, led }),
         castVote: (card) => call('castVote', { issueId, card }),

@@ -4,7 +4,7 @@ import { realtime, router } from '@forge/bridge';
 import * as api from '../lib/api';
 import { useAutoReveal } from '../lib/useAutoReveal';
 import { usePresence } from '../lib/usePresence';
-import { CHANNEL, useSession } from '../lib/useSession';
+import { PAGE_CHANNEL, useSession } from '../lib/useSession';
 import IssuePicker from './IssuePicker';
 import SessionView from './SessionView';
 
@@ -42,11 +42,14 @@ export default function RefinementPage() {
     const [error, setError] = useState(null);
     const clearTimer = useRef(null);
 
-    // Presence belongs to the page, not to each issue: whoever has the page open
-    // is in the meeting. Moving to the next issue therefore doesn't make the
-    // whole room leave and re-announce itself, which in a big meeting could brush
-    // against Forge's realtime rate limit.
-    const presence = usePresence(true);
+    // The page joins presence once and then just announces which issue it's on,
+    // so moving to the next issue is one message per viewer rather than the
+    // whole room leaving and re-joining, which in a big meeting could brush
+    // against Forge's realtime rate limit. People viewing the same issue through
+    // its issue panel show up too. A focus that has left the queue isn't an
+    // issue anyone is estimating, so it isn't announced.
+    const announcedIssueId = queue.some((issue) => issue.id === focusId) ? focusId : null;
+    const presence = usePresence(true, announcedIssueId);
 
     // Name of whoever leads the current issue's session, when that isn't this
     // viewer. Switching issues is then theirs alone (the server enforces it too).
@@ -82,7 +85,7 @@ export default function RefinementPage() {
         let subscription;
 
         realtime
-            .subscribe(CHANNEL, onEvent)
+            .subscribe(PAGE_CHANNEL, onEvent)
             .then((sub) => {
                 subscription = sub;
                 if (!active) {
