@@ -9,6 +9,8 @@
     --pp-surface-raised: var(--ds-background-neutral, #f7f8f9);
     --pp-accent: var(--ds-background-brand-bold, #0c66e4);
     --pp-accent-text: var(--ds-text-inverse, #ffffff);
+    --pp-selected-bg: var(--ds-background-selected, #e9f2ff);
+    --pp-selected-text: var(--ds-text-selected, #0c66e4);
     --pp-danger-bg: var(--ds-background-danger, #ffeceb);
     --pp-danger-text: var(--ds-text-danger, #ae2e24);
     --pp-ok-bg: var(--ds-background-success, #dcfff1);
@@ -160,8 +162,21 @@ body {
     align-items: center;
     gap: 8px;
     padding: 6px 8px;
+    /* Transparent until voted, so every row's content lines up the same. */
+    border-left: 3px solid transparent;
     border-radius: var(--pp-radius);
     background: var(--pp-surface-raised);
+}
+
+/* Has voted in the open round: Jira's "selected" blue, with the same accent bar
+   as the issue being estimated in the refinement queue. */
+.voter--voted {
+    background: var(--pp-selected-bg);
+    border-left-color: var(--pp-accent);
+}
+
+.voter--voted .voter__card {
+    color: var(--pp-selected-text);
 }
 
 .voter__avatar {

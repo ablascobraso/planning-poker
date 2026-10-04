@@ -65,7 +65,15 @@ export default function Participants({ votes, present, presenceReady, me, reveal
             {rows.map((row) => (
                 <li
                     key={row.accountId}
-                    className={`voter${row.away ? ' voter--away' : ''}`}
+                    className={[
+                        'voter',
+                        // While the round is open, voters stand out from those
+                        // still choosing. After the reveal everyone listed voted.
+                        !revealed && row.voted ? 'voter--voted' : '',
+                        row.away ? 'voter--away' : '',
+                    ]
+                        .filter(Boolean)
+                        .join(' ')}
                     title={row.away ? 'Voted, then left this session' : undefined}
                 >
                     <Avatar person={row} />
