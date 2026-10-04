@@ -32,7 +32,7 @@ function openRoundRows(votes, present, presenceReady) {
     return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function Status({ row, revealed }) {
+function Status({ row, revealed, isFacilitator }) {
     if (revealed) {
         return <span className="voter__card">{row.card}</span>;
     }
@@ -45,6 +45,11 @@ function Status({ row, revealed }) {
         );
     }
 
+    // A facilitator runs the meeting and may not vote, so nobody waits for them.
+    if (isFacilitator) {
+        return <span className="voter__card" />;
+    }
+
     return (
         <span className="voter__card voter__card--waiting" title="Hasn't voted yet">
             …
@@ -52,7 +57,8 @@ function Status({ row, revealed }) {
     );
 }
 
-export default function Participants({ votes, present, presenceReady, me, revealed }) {
+// facilitator: the account leading the session, or null when it isn't led.
+export default function Participants({ votes, present, presenceReady, me, facilitator, revealed }) {
     // Once revealed, the votes are what matter, in the order they were cast.
     const rows = revealed ? votes : openRoundRows(votes, present, presenceReady);
 
@@ -80,8 +86,13 @@ export default function Participants({ votes, present, presenceReady, me, reveal
                     <span className="voter__name">
                         {row.name}
                         {row.accountId === me ? ' (you)' : ''}
+                        {row.accountId === facilitator && <span className="lead-tag">Leading</span>}
                     </span>
-                    <Status row={row} revealed={revealed} />
+                    <Status
+                        row={row}
+                        revealed={revealed}
+                        isFacilitator={row.accountId === facilitator}
+                    />
                 </li>
             ))}
         </ul>

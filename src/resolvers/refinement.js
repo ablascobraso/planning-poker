@@ -1,7 +1,7 @@
 import { broadcast, EVENTS } from '../lib/events';
 import { fetchIssues, requireIssueInProject, searchIssues } from '../lib/issues';
-import { readFocus, readQueue, writeFocus, writeQueue } from '../lib/store';
-import { handle } from './session';
+import { readFocus, readQueue, readSession, writeFocus, writeQueue } from '../lib/store';
+import { handle, requireLead } from './session';
 
 // Resolvers for the project-level refinement page. Voting itself reuses the
 // session resolvers - each issue still has its own independent session - so this
@@ -26,6 +26,27 @@ async function queueDetails(projectId, issueIds) {
     const issues = await fetchIssues(projectId, issueIds);
     const byId = new Map(issues.map((issue) => [issue.id, issue]));
     return issueIds.map((id) => byId.get(id)).filter(Boolean);
+}
+
+// While the issue everyone is estimating has a led session, only its facilitator
+// may move the room to another issue: switching issues moves everyone, so it's
+// the most disruptive click to make by accident. Editing the queue stays open.
+async function requireNavigator(projectId, accountId, targetIssueId) {
+    const focus = await readFocus(projectId);
+
+    if (!focus || focus.issueId === targetIssueId) {
+        return;
+    }
+
+    // A focus on an issue that has left the queue no longer holds the room (the
+    // page asks everyone to pick an issue), so it doesn't lock anything.
+    const queue = await readQueue(projectId);
+
+    if (!queue.includes(focus.issueId)) {
+        return;
+    }
+
+    requireLead(await readSession(focus.issueId), accountId, 'move everyone to another issue');
 }
 
 // Every queue change is announced so all open pages refresh their copy - each
@@ -111,6 +132,8 @@ export function defineRefinementResolvers(resolver) {
         handle(async (req) => {
             const { projectId } = projectOf(req);
             const { issueId } = await requireIssueInProject(req.payload?.issueId, projectId);
+
+            await requireNavigator(projectId, req.context.accountId, issueId);
 
             await writeFocus(projectId, issueId);
             await broadcast(EVENTS.FOCUS, { issueId });

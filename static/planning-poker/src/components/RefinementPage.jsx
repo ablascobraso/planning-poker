@@ -8,9 +8,22 @@ import { CHANNEL, useSession } from '../lib/useSession';
 import IssuePicker from './IssuePicker';
 import SessionView from './SessionView';
 
-function FocusedSession({ issueId, presence }) {
+// onLockChange tells the page who (if anyone else) leads this issue's session:
+// while someone else leads it, only they may move everyone to another issue.
+function FocusedSession({ issueId, presence, onLockChange }) {
     const state = useSession(issueId);
     const autoReveal = useAutoReveal(state, presence, issueId);
+
+    const { session, me } = state;
+    const lockedBy =
+        session?.led && session.facilitator !== me ? session.facilitatorName ?? 'The facilitator' : null;
+
+    useEffect(() => {
+        onLockChange(lockedBy);
+    }, [lockedBy, onLockChange]);
+
+    // Leaving this issue releases the lock it reported.
+    useEffect(() => () => onLockChange(null), [onLockChange]);
 
     return <SessionView {...state} presence={presence} autoReveal={autoReveal} />;
 }
@@ -34,6 +47,10 @@ export default function RefinementPage() {
     // whole room leave and re-announce itself, which in a big meeting could brush
     // against Forge's realtime rate limit.
     const presence = usePresence(true);
+
+    // Name of whoever leads the current issue's session, when that isn't this
+    // viewer. Switching issues is then theirs alone (the server enforces it too).
+    const [lockedBy, setLockedBy] = useState(null);
 
     const load = useCallback(async () => {
         try {
@@ -198,13 +215,18 @@ export default function RefinementPage() {
                         </button>
                         <h2 className="current__summary">{current.summary}</h2>
                     </div>
-                    {next && (
+                    {next && !lockedBy && (
                         <button type="button" className="btn" onClick={() => focusOn(next.id)}>
                             Next issue →
                         </button>
                     )}
                 </div>
-                <FocusedSession key={focusId} issueId={focusId} presence={presence} />
+                <FocusedSession
+                    key={focusId}
+                    issueId={focusId}
+                    presence={presence}
+                    onLockChange={setLockedBy}
+                />
             </>
         );
     };
@@ -238,6 +260,12 @@ export default function RefinementPage() {
                                     type="button"
                                     className={`issue${issue.id === focusId ? ' issue--active' : ''}`}
                                     aria-current={issue.id === focusId}
+                                    disabled={Boolean(lockedBy) && issue.id !== focusId}
+                                    title={
+                                        lockedBy && issue.id !== focusId
+                                            ? `${lockedBy} is leading, so only they can switch issues`
+                                            : undefined
+                                    }
                                     onClick={() => {
                                         setPicking(false);
                                         focusOn(issue.id);
@@ -259,6 +287,12 @@ export default function RefinementPage() {
                             </li>
                         ))}
                     </ul>
+                )}
+
+                {lockedBy && (
+                    <p className="muted refinement__lock">
+                        {lockedBy} is leading, so only they can switch issues.
+                    </p>
                 )}
 
                 {queue.length > 0 && (

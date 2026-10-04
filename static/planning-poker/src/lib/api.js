@@ -19,7 +19,8 @@ async function call(name, payload) {
 export function sessionApi(issueId) {
     return {
         getState: () => call('getState', { issueId }),
-        startSession: (scale) => call('startSession', { issueId, scale }),
+        // led: only the person starting the session may then reveal and move on.
+        startSession: (scale, led) => call('startSession', { issueId, scale, led }),
         castVote: (card) => call('castVote', { issueId, card }),
         reveal: () => call('reveal', { issueId }),
         // round and accountIds describe what this browser saw: everyone in the
@@ -27,6 +28,7 @@ export function sessionApi(issueId) {
         autoReveal: (round, accountIds) => call('autoReveal', { issueId, round, accountIds }),
         revote: () => call('revote', { issueId }),
         endSession: () => call('endSession', { issueId }),
+        takeOver: () => call('takeOver', { issueId }),
     };
 }
 

@@ -12,6 +12,7 @@ const EMPTY = {
     votes: [],
     myVote: null,
     defaultScale: null,
+    defaultLed: false,
 };
 
 // State and actions for one issue's session. Pass an issueId on the refinement
@@ -94,14 +95,19 @@ export function useSession(issueId) {
                             ...prev,
                             ...EMPTY,
                             scales: prev.scales,
-                            // Starting a session also made its deck the space default.
+                            // Starting a session also made its deck and lead
+                            // choice the space's defaults.
                             defaultScale: payload.scale,
+                            defaultLed: payload.led === true,
                             cards: payload.cards ?? prev.cards,
                             session: {
                                 ...(prev.session ?? {}),
                                 scale: payload.scale,
                                 revealed: false,
                                 round: payload.round,
+                                led: payload.led === true,
+                                facilitator: payload.facilitator,
+                                facilitatorName: payload.facilitatorName ?? null,
                             },
                         };
 
@@ -133,7 +139,22 @@ export function useSession(issueId) {
                             ...EMPTY,
                             scales: prev.scales,
                             defaultScale: prev.defaultScale ?? prev.session?.scale ?? null,
+                            // The ended session's choice is the space's latest default.
+                            defaultLed: prev.session ? prev.session.led === true : prev.defaultLed,
                         };
+
+                    // Someone took over a led session.
+                    case 'lead':
+                        return prev.session
+                            ? {
+                                  ...prev,
+                                  session: {
+                                      ...prev.session,
+                                      facilitator: payload.facilitator,
+                                      facilitatorName: payload.facilitatorName ?? null,
+                                  },
+                              }
+                            : prev;
 
                     default:
                         return prev;
@@ -161,12 +182,13 @@ export function useSession(issueId) {
     }, [refresh, issueId]);
 
     const actions = {
-        start: (scale) => run(() => api.startSession(scale)),
+        start: (scale, led) => run(() => api.startSession(scale, led)),
         vote: (card) => run(() => api.castVote(card)),
         reveal: () => run(api.reveal),
         autoReveal: (round, accountIds) => run(() => api.autoReveal(round, accountIds)),
         revote: () => run(api.revote),
         end: () => run(api.endSession),
+        takeOver: () => run(api.takeOver),
     };
 
     return { ...state, loading, busy, error, actions, dismissError: () => setError(null) };

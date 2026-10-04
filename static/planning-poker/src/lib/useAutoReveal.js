@@ -20,21 +20,30 @@ const MIN_ROOM_SIZE = 2;
 // Pressing "Wait" holds auto-reveal for the rest of the round, for everyone; the
 // Reveal button keeps working. A hold is tied to the round, so the next round
 // starts with auto-reveal back on.
+//
+// Led sessions never auto-reveal: their facilitator decides when. They still
+// report everyoneVoted, so the facilitator can be told it's time. And since the
+// facilitator runs the meeting and may not vote, nobody waits for them.
 export function useAutoReveal({ session, votes, actions }, presence, issueId) {
     const round = session?.round ?? null;
     const open = Boolean(session) && !session.revealed;
+
+    const led = session?.led === true;
+    const facilitator = led ? session.facilitator : null;
 
     // Both "waiting for…" and auto-reveal only mean something for a group.
     const group = open && presence.ready && presence.present.length >= MIN_ROOM_SIZE;
 
     const voted = new Set(votes.map((vote) => vote.accountId));
-    const waitingFor = group ? presence.present.filter((person) => !voted.has(person.accountId)) : [];
+    const voters = presence.present.filter((person) => person.accountId !== facilitator);
+    const waitingFor = group ? voters.filter((person) => !voted.has(person.accountId)) : [];
+    const everyoneVoted = group && voters.length > 0 && waitingFor.length === 0;
 
     const held = Boolean(
         presence.hold && presence.hold.round === round && presence.hold.issueId === (issueId ?? null)
     );
 
-    const armed = group && waitingFor.length === 0 && !held;
+    const armed = everyoneVoted && !led && !held;
 
     const [deadline, setDeadline] = useState(null);
     const [now, setNow] = useState(() => Date.now());
@@ -72,6 +81,7 @@ export function useAutoReveal({ session, votes, actions }, presence, issueId) {
 
     return {
         waitingFor,
+        everyoneVoted,
         // Counts down 3, 2, 1, then 0 ("revealing…") until the reveal lands;
         // null when no countdown is running.
         secondsLeft,

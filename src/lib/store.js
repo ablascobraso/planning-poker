@@ -9,7 +9,7 @@ import { kvs, WhereConditions } from '@forge/kvs';
 // moment - which in planning poker is the normal case, not an edge case.
 const sessionKey = (issueId) => `pp:s:${issueId}`;
 const focusKey = (projectId) => `pp:f:${projectId}`;
-const deckKey = (projectId) => `pp:d:${projectId}`;
+const defaultsKey = (projectId) => `pp:d:${projectId}`;
 const queueKey = (projectId) => `pp:q:${projectId}`;
 const voteKey = (issueId, accountId) => `pp:v:${issueId}:${accountId}`;
 const votePrefix = (issueId) => `pp:v:${issueId}:`;
@@ -56,16 +56,18 @@ export async function writeFocus(projectId, issueId) {
     await kvs.set(focusKey(projectId), { issueId, updatedAt: Date.now() }, EXPIRY);
 }
 
-// The deck a Jira space (project) uses by default: whichever was picked for the
-// most recent session there. It's a team preference rather than session data, so
-// unlike everything else it doesn't expire.
-export async function readDefaultDeck(projectId) {
-    const deck = await kvs.get(deckKey(projectId));
-    return deck?.scale ?? null;
+// How a Jira space (project) starts new sessions by default: the deck, and
+// whether the person starting a session leads it (see "led" in session.js).
+// Both are whatever the most recent session there used. They're team
+// preferences rather than session data, so unlike everything else they don't
+// expire. Records saved before "led" existed simply read as not led.
+export async function readSpaceDefaults(projectId) {
+    const defaults = await kvs.get(defaultsKey(projectId));
+    return { scale: defaults?.scale ?? null, led: defaults?.led === true };
 }
 
-export async function writeDefaultDeck(projectId, scale) {
-    await kvs.set(deckKey(projectId), { scale, updatedAt: Date.now() });
+export async function writeSpaceDefaults(projectId, { scale, led }) {
+    await kvs.set(defaultsKey(projectId), { scale, led, updatedAt: Date.now() });
 }
 
 // The space's hand-picked estimation queue: issue ids in the order they were

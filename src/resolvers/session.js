@@ -6,12 +6,12 @@ import { cardsFor, DEFAULT_SCALE, isValidCard, isValidScale, scaleOptions } from
 import {
     clearVotes,
     deleteSession,
-    readDefaultDeck,
     readSession,
+    readSpaceDefaults,
     readVotes,
     renewVotes,
-    writeDefaultDeck,
     writeSession,
+    writeSpaceDefaults,
     writeVote,
 } from '../lib/store';
 
@@ -64,6 +64,27 @@ export async function contextOf(req) {
     throw new Error('Planning Poker must be opened from a Jira issue or project.');
 }
 
+// FACILITATOR CONTROLS. A session can be "led": then only its facilitator -
+// whoever started it, or whoever later took over - may reveal, start a new
+// round, restart or end it, and auto-reveal is off because the facilitator
+// decides when. Sessions that aren't led stay open to everyone, as before.
+//
+// This guards against accidental clicks in bigger meetings; it is not a
+// security permission. Jira still decides who can see the issue, and anyone in
+// the session can take over (see takeOver) if the facilitator has gone.
+export function mayLead(session, accountId) {
+    return !session?.led || session.facilitator === accountId;
+}
+
+// Enforced here rather than only by hiding buttons, so a tab that missed an
+// update (or a crafted invoke) can't act on a led session either.
+export function requireLead(session, accountId, action) {
+    if (!mayLead(session, accountId)) {
+        const name = session.facilitatorName ?? 'The facilitator';
+        throw new Error(`${name} is leading this session, so only they can ${action}.`);
+    }
+}
+
 async function currentUser() {
     const response = await api.asUser().requestJira(route`/rest/api/3/myself`);
 
@@ -78,16 +99,19 @@ async function currentUser() {
 async function buildState(issueId, accountId, projectId) {
     const session = await readSession(issueId);
 
-    // The default deck only matters on the start screen, so it's only read then.
+    // The space's defaults only matter on the start screen, so they're only read then.
     if (!session) {
-        const defaultScale = projectId ? await readDefaultDeck(projectId) : null;
+        const defaults = projectId
+            ? await readSpaceDefaults(projectId)
+            : { scale: null, led: false };
         return {
             session: null,
             cards: [],
             votes: [],
             myVote: null,
             scales: scaleOptions(),
-            defaultScale: isValidScale(defaultScale) ? defaultScale : null,
+            defaultScale: isValidScale(defaults.scale) ? defaults.scale : null,
+            defaultLed: defaults.led,
         };
     }
 
@@ -98,7 +122,10 @@ async function buildState(issueId, accountId, projectId) {
             scale: session.scale,
             revealed: session.revealed,
             round: session.round,
+            // Sessions saved before facilitator controls existed read as not led.
+            led: session.led === true,
             facilitator: session.facilitator,
+            facilitatorName: session.facilitatorName ?? null,
             startedAt: session.startedAt,
         },
         cards: cardsFor(session.scale),
@@ -167,19 +194,30 @@ export function defineSessionResolvers(resolver) {
         handle(async (req) => {
             const { issueId, projectId, accountId } = await contextOf(req);
             const scale = isValidScale(req.payload?.scale) ? req.payload.scale : DEFAULT_SCALE;
+            const led = req.payload?.led === true;
+
+            // Starting replaces whatever session is there, so a led one can only
+            // be restarted by its facilitator. Start is hidden while a session
+            // runs, but a tab that missed the "started" update could still show it.
+            requireLead(await readSession(issueId), accountId, 'restart it');
 
             await clearVotes(issueId);
 
-            // The deck picked here becomes the space's default for the next session.
+            // The deck and the leading choice become the space's defaults.
             if (projectId) {
-                await writeDefaultDeck(projectId, scale);
+                await writeSpaceDefaults(projectId, { scale, led });
             }
+
+            // A led session shows everyone who leads it, so it keeps their name.
+            const facilitatorName = led ? (await currentUser()).name : null;
 
             const session = {
                 scale,
                 revealed: false,
                 round: 1,
+                led,
                 facilitator: accountId,
+                facilitatorName,
                 startedAt: Date.now(),
             };
             await writeSession(issueId, session);
@@ -189,6 +227,9 @@ export function defineSessionResolvers(resolver) {
                 round: session.round,
                 scale,
                 cards: cardsFor(scale),
+                led,
+                facilitator: accountId,
+                facilitatorName,
             });
 
             return buildState(issueId, accountId);
@@ -242,6 +283,8 @@ export function defineSessionResolvers(resolver) {
                 throw new Error('There is no session to reveal.');
             }
 
+            requireLead(session, context.accountId, 'reveal the cards');
+
             const votes = await readVotes(context.issueId);
 
             if (votes.length === 0) {
@@ -257,7 +300,8 @@ export function defineSessionResolvers(resolver) {
     // or the round may already be revealed - so the claim is re-checked against
     // storage, and if it no longer holds this quietly does nothing instead of
     // failing. It grants nothing the Reveal button doesn't already: anyone in a
-    // session can reveal it.
+    // session that isn't led can reveal it. Led sessions never auto-reveal -
+    // their facilitator decides when.
     resolver.define(
         'autoReveal',
         handle(async (req) => {
@@ -267,7 +311,10 @@ export function defineSessionResolvers(resolver) {
             const session = await readSession(issueId);
 
             const stillOpen =
-                session && !session.revealed && session.round === req.payload?.round;
+                session &&
+                !session.led &&
+                !session.revealed &&
+                session.round === req.payload?.round;
 
             if (!stillOpen || expected.length === 0) {
                 return buildState(issueId, accountId, projectId);
@@ -294,6 +341,8 @@ export function defineSessionResolvers(resolver) {
                 throw new Error('There is no session to reset.');
             }
 
+            requireLead(session, accountId, 'start a new round');
+
             await clearVotes(issueId);
 
             const next = { ...session, revealed: false, round: session.round + 1 };
@@ -310,11 +359,45 @@ export function defineSessionResolvers(resolver) {
         handle(async (req) => {
             const { issueId, projectId, accountId } = await contextOf(req);
 
+            requireLead(await readSession(issueId), accountId, 'end it');
+
             await clearVotes(issueId);
             await deleteSession(issueId);
             await broadcast(EVENTS.ENDED, { issueId });
 
             return buildState(issueId, accountId, projectId);
+        })
+    );
+
+    // Makes the caller the facilitator of a led session, so a session never gets
+    // stuck when its facilitator leaves. The UI only offers this once the
+    // facilitator has dropped out of "Who's here", but the server can't check
+    // that - presence lives in the browsers - so anyone in the session may take
+    // over. That's acceptable for a guard against accidents: everyone can see
+    // who leads, and the change is announced to all.
+    resolver.define(
+        'takeOver',
+        handle(async (req) => {
+            const { issueId, accountId } = await contextOf(req);
+            const session = await readSession(issueId);
+
+            if (!session) {
+                throw new Error('There is no session to lead.');
+            }
+
+            if (mayLead(session, accountId)) {
+                return buildState(issueId, accountId);
+            }
+
+            const { name } = await currentUser();
+
+            // Rewriting the shared session object could in principle race with a
+            // reveal or a new round, but in a led session only the facilitator -
+            // who is gone - can do those.
+            await writeSession(issueId, { ...session, facilitator: accountId, facilitatorName: name });
+            await broadcast(EVENTS.LEAD, { issueId, facilitator: accountId, facilitatorName: name });
+
+            return buildState(issueId, accountId);
         })
     );
 }

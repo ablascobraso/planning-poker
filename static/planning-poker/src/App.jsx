@@ -11,11 +11,13 @@ function IssuePanel() {
     const state = useSession();
 
     // The panel shows on every issue it was added to, for everyone who opens
-    // that issue, so presence only runs while a round is open - the only time
-    // "who's here" and auto-reveal matter. That keeps realtime traffic in line
-    // with actual estimating rather than with general Jira browsing.
-    const roundOpen = Boolean(state.session) && !state.session.revealed;
-    const presence = usePresence(roundOpen);
+    // that issue, so presence only runs while it matters: while a round is open
+    // ("who's here", auto-reveal), and for the whole of a led session, where it
+    // also tells others when the facilitator has left so they can take over.
+    // That keeps realtime traffic in line with actual estimating rather than
+    // with general Jira browsing.
+    const session = state.session;
+    const presence = usePresence(Boolean(session) && (!session.revealed || session.led === true));
     const autoReveal = useAutoReveal(state, presence);
 
     return <SessionView {...state} presence={presence} autoReveal={autoReveal} />;

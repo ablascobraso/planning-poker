@@ -453,8 +453,13 @@ body {
     cursor: pointer;
 }
 
-.issue:hover {
+.issue:hover:not(:disabled) {
     background: var(--pp-surface-raised);
+}
+
+/* Someone else leads the current issue, so only they can switch issues. */
+.issue:disabled {
+    cursor: not-allowed;
 }
 
 .issue--active {
@@ -562,6 +567,10 @@ body {
 .queue-item__remove:hover {
     background: var(--pp-surface-raised);
     color: var(--pp-danger-text);
+}
+
+.refinement__lock {
+    margin-top: 4px;
 }
 
 .refinement__clear {
@@ -676,4 +685,38 @@ body {
 .picker__more {
     align-self: center;
     margin: 6px 0;
+}
+
+/* Start screen: "Lead this session" */
+.check {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.check input {
+    margin: 3px 0 0;
+    accent-color: var(--pp-accent);
+}
+
+.check__hint {
+    display: block;
+    font-size: 12px;
+    color: var(--pp-subtle);
+}
+
+/* Marks the facilitator of a led session in "Who's here" */
+.lead-tag {
+    margin-left: 8px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: var(--pp-selected-bg);
+    color: var(--pp-selected-text);
+    vertical-align: 1px;
 }

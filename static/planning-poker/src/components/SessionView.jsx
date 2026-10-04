@@ -7,11 +7,13 @@ import Results from './Results';
 const deckLabel = ({ label, cards }) => `${label} (${cards.join(', ')})`;
 
 // Once a Jira space has used a deck, it's preselected and shown as a summary, so
-// starting is one click; "Change" brings the picker back for this session.
-function StartScreen({ scales, defaultScale, busy, onStart }) {
+// starting is one click; "Change" brings the picker back for this session. The
+// "Lead this session" choice is remembered per space the same way.
+function StartScreen({ scales, defaultScale, defaultLed, busy, onStart }) {
     const remembered = scales.find((option) => option.id === defaultScale);
     const [scale, setScale] = useState(remembered?.id ?? scales[0]?.id ?? 'fibonacci');
     const [picking, setPicking] = useState(!remembered);
+    const [led, setLed] = useState(defaultLed === true);
 
     return (
         <div className="empty">
@@ -41,7 +43,7 @@ function StartScreen({ scales, defaultScale, busy, onStart }) {
                         type="button"
                         className="btn btn--primary"
                         disabled={busy}
-                        onClick={() => onStart(scale)}
+                        onClick={() => onStart(scale, led)}
                     >
                         Start session
                     </button>
@@ -52,7 +54,7 @@ function StartScreen({ scales, defaultScale, busy, onStart }) {
                         type="button"
                         className="btn btn--primary"
                         disabled={busy}
-                        onClick={() => onStart(scale)}
+                        onClick={() => onStart(scale, led)}
                     >
                         Start session
                     </button>
@@ -65,8 +67,25 @@ function StartScreen({ scales, defaultScale, busy, onStart }) {
                 </div>
             )}
 
+            <label className="check">
+                <input
+                    type="checkbox"
+                    checked={led}
+                    onChange={(event) => setLed(event.target.checked)}
+                />
+                <span>
+                    Lead this session
+                    <span className="check__hint">
+                        Only the person who starts the session can reveal the cards and move
+                        on.
+                    </span>
+                </span>
+            </label>
+
             {picking && (
-                <p className="muted">The deck you start with becomes the default for this space.</p>
+                <p className="muted">
+                    The deck and lead choice you start with become this space's defaults.
+                </p>
             )}
         </div>
     );
@@ -89,9 +108,10 @@ function namesOf(people, me) {
 }
 
 // One line under the header while a round is open: the auto-reveal countdown,
-// the fact that it's on hold, or who we're still waiting for.
-function RoundStatus({ autoReveal, me }) {
-    const { secondsLeft, held, waitingFor, hold } = autoReveal;
+// that everyone has voted (led sessions, which don't auto-reveal), that
+// auto-reveal is on hold, or who we're still waiting for.
+function RoundStatus({ session, autoReveal, me }) {
+    const { secondsLeft, everyoneVoted, held, waitingFor, hold } = autoReveal;
 
     if (secondsLeft !== null) {
         return (
@@ -108,6 +128,19 @@ function RoundStatus({ autoReveal, me }) {
                     </button>
                 )}
             </div>
+        );
+    }
+
+    if (session.led && everyoneVoted) {
+        return session.facilitator === me ? (
+            <p className="round-status round-status--go" role="status">
+                Everyone has voted. Reveal the cards when you're ready.
+            </p>
+        ) : (
+            <p className="round-status muted" role="status">
+                Everyone has voted. Waiting for {session.facilitatorName ?? 'the facilitator'} to
+                reveal.
+            </p>
         );
     }
 
@@ -138,6 +171,7 @@ export default function SessionView({
     cards,
     scales,
     defaultScale,
+    defaultLed,
     votes,
     myVote,
     me,
@@ -155,16 +189,33 @@ export default function SessionView({
 
     const revealed = session?.revealed ?? false;
 
-    // "3 of 5 voted" counts everyone here plus anyone who voted and left. Without
-    // working presence there's nobody to count against, so it's just "3 voted".
+    // In a led session only the facilitator gets the controls (the server
+    // enforces the same rule). If they leave "Who's here", anyone else can take
+    // over, so the session never gets stuck.
+    const led = session?.led === true;
+    const leading = led && session.facilitator === me;
+    const inControl = !led || leading;
+    const facilitatorHere = presence.present.some((person) => person.accountId === session?.facilitator);
+    const canTakeOver = led && !leading && presence.ready && !facilitatorHere;
+
+    // "3 of 5 voted" counts everyone here plus anyone who voted and left - except
+    // a facilitator who isn't voting. Without working presence there's nobody to
+    // count against, so it's just "3 voted".
     const everyone = new Set([
         ...presence.present.map((person) => person.accountId),
         ...votes.map((vote) => vote.accountId),
     ]);
+    if (led && !votes.some((vote) => vote.accountId === session.facilitator)) {
+        everyone.delete(session.facilitator);
+    }
     const votedLabel =
         presence.ready && everyone.size > votes.length
             ? `${votes.length} of ${everyone.size} voted`
             : `${votes.length} voted`;
+
+    const leadLabel = leading
+        ? " · You're leading"
+        : ` · Led by ${session?.facilitatorName ?? 'the facilitator'}`;
 
     return (
         <div className="shell">
@@ -181,6 +232,7 @@ export default function SessionView({
                 <StartScreen
                     scales={scales}
                     defaultScale={defaultScale}
+                    defaultLed={defaultLed}
                     busy={busy}
                     onStart={actions.start}
                 />
@@ -192,13 +244,13 @@ export default function SessionView({
                                 {revealed ? 'Cards revealed!' : 'Pick your card!'}
                             </h2>
                             <p className="muted">
-                                Round {session.round} ·{' '}
-                                {revealed ? 'Revealed' : votedLabel}
+                                Round {session.round} · {revealed ? 'Revealed' : votedLabel}
+                                {led && leadLabel}
                             </p>
                         </div>
 
                         <div className="header__actions">
-                            {!revealed && (
+                            {inControl && !revealed && (
                                 <button
                                     type="button"
                                     className="btn btn--primary"
@@ -208,7 +260,7 @@ export default function SessionView({
                                     Reveal cards
                                 </button>
                             )}
-                            {revealed && (
+                            {inControl && revealed && (
                                 <button
                                     type="button"
                                     className="btn"
@@ -218,13 +270,31 @@ export default function SessionView({
                                     New round
                                 </button>
                             )}
-                            <button type="button" className="btn" disabled={busy} onClick={actions.end}>
-                                End
-                            </button>
+                            {inControl && (
+                                <button
+                                    type="button"
+                                    className="btn"
+                                    disabled={busy}
+                                    onClick={actions.end}
+                                >
+                                    End
+                                </button>
+                            )}
+                            {canTakeOver && (
+                                <button
+                                    type="button"
+                                    className="btn"
+                                    disabled={busy}
+                                    title={`${session.facilitatorName ?? 'The facilitator'} has left this session`}
+                                    onClick={actions.takeOver}
+                                >
+                                    Take over
+                                </button>
+                            )}
                         </div>
                     </header>
 
-                    {!revealed && <RoundStatus autoReveal={autoReveal} me={me} />}
+                    {!revealed && <RoundStatus session={session} autoReveal={autoReveal} me={me} />}
 
                     {!revealed && (
                         <section>
@@ -247,6 +317,7 @@ export default function SessionView({
                             present={presence.present}
                             presenceReady={presence.ready}
                             me={me}
+                            facilitator={led ? session.facilitator : null}
                             revealed={revealed}
                         />
                     </section>

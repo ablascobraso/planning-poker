@@ -12,6 +12,7 @@ export const EVENTS = {
     REVEALED: 'revealed',
     RESET: 'reset',
     ENDED: 'ended',
+    LEAD: 'lead',
     FOCUS: 'focus',
     QUEUE: 'queue',
 };
