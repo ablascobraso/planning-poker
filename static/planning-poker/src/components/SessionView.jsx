@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import Deck from './Deck';
 import Participants from './Participants';
@@ -185,6 +185,19 @@ export default function SessionView({
     presence,
     autoReveal,
 }) {
+    // Remembers the last round this screen saw while it was still open, so the
+    // results only celebrate a reveal that happened in front of the viewer -
+    // not a round that was already revealed when they opened the issue.
+    const openRound = useRef(null);
+    const round = session?.round ?? null;
+    const isOpen = Boolean(session) && !session.revealed;
+
+    useEffect(() => {
+        if (isOpen) {
+            openRound.current = round;
+        }
+    }, [isOpen, round]);
+
     if (loading) {
         return <div className="shell shell--centered muted">Loading…</div>;
     }
@@ -324,7 +337,9 @@ export default function SessionView({
                         />
                     </section>
 
-                    {revealed && <Results votes={votes} />}
+                    {revealed && (
+                        <Results votes={votes} justRevealed={openRound.current === session.round} />
+                    )}
 
                     <RoundHistory history={history} currentRound={session.round} />
                 </>

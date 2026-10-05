@@ -952,3 +952,15 @@ body {
     align-items: center;
     gap: 8px;
 }
+
+/* The full-frame canvas a consensus confetti burst is drawn on (see
+   useConsensusConfetti.js). It never blocks clicks and removes itself when the
+   burst is over. */
+.confetti-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 100;
+}
