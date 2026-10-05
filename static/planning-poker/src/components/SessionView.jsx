@@ -18,10 +18,7 @@ function StartScreen({ scales, defaultScale, defaultLed, busy, onStart }) {
 
     return (
         <div className="empty">
-            <h2 className="empty__title">Estimate this issue as a team</h2>
-            <p className="muted">
-                Everyone votes in private. Nobody sees a card until you reveal them.
-            </p>
+            <h2 className="empty__title">Estimate this issue</h2>
 
             {picking ? (
                 <div className="empty__actions">
