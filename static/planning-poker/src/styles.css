@@ -11,6 +11,7 @@
     --pp-accent-text: var(--ds-text-inverse, #ffffff);
     --pp-selected-bg: var(--ds-background-selected, #e9f2ff);
     --pp-selected-text: var(--ds-text-selected, #0c66e4);
+    --pp-blue-subtle: var(--ds-background-accent-blue-subtler, #cce0ff);
     --pp-danger-bg: var(--ds-background-danger, #ffeceb);
     --pp-danger-text: var(--ds-text-danger, #ae2e24);
     --pp-ok-bg: var(--ds-background-success, #dcfff1);
@@ -240,13 +241,16 @@ body {
     color: var(--pp-ok-text);
 }
 
-/* Results */
+/* Results: the revealed round, highlighted in Jira's brand blue - the same
+   "selected" tint and accent bar used for voters and the current issue. */
 .results {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    border-top: 1px solid var(--pp-border);
-    padding-top: 16px;
+    padding: 16px;
+    border-left: 3px solid var(--pp-accent);
+    border-radius: var(--pp-radius);
+    background: var(--pp-selected-bg);
 }
 
 .results__head {
@@ -273,29 +277,155 @@ body {
     color: var(--pp-ok-text);
 }
 
-.distribution {
+.results__hero {
     display: flex;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+}
+
+.results__cards {
+    display: flex;
     gap: 8px;
+    perspective: 600px;
 }
 
-.distribution__item {
+/* The winning value as a blue playing card, with small corner values. */
+.result-card {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 88px;
+    border-radius: 10px;
+    background: var(--pp-accent);
+    color: var(--pp-accent-text);
+    font-size: 28px;
+    font-weight: 700;
+    box-shadow:
+        inset 0 0 0 4px var(--pp-accent),
+        inset 0 0 0 5px rgba(255, 255, 255, 0.35),
+        0 4px 12px rgba(9, 30, 66, 0.25);
+    animation: pp-flip 0.45s ease-out both;
+}
+
+.result-card--small {
+    width: 52px;
+    height: 72px;
+    font-size: 22px;
+}
+
+.result-card__pip {
+    position: absolute;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.result-card__pip--top {
+    top: 8px;
+    left: 9px;
+}
+
+.result-card__pip--bottom {
+    right: 9px;
+    bottom: 8px;
+    transform: rotate(180deg);
+}
+
+.results__caption {
     display: flex;
-    align-items: baseline;
-    gap: 6px;
-    padding: 6px 10px;
-    border-radius: var(--pp-radius);
-    background: var(--pp-surface-raised);
+    flex-direction: column;
+    gap: 2px;
 }
 
-.distribution__card {
+.results__headline {
     font-size: 16px;
+    font-weight: 600;
+    color: var(--pp-selected-text);
+}
+
+.results__detail {
+    font-size: 12px;
+    color: var(--pp-subtle);
+}
+
+/* One bar per card when the votes differ: the winners in strong blue, the
+   rest in light blue, each sized by its share of the votes. */
+.results__bars {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.results__bar {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) 56px;
+    align-items: center;
+    gap: 8px;
+    cursor: default;
+}
+
+.results__bar-card {
+    text-align: center;
+    font-size: 14px;
     font-weight: 600;
 }
 
-.distribution__count {
+.results__bar-track {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--pp-surface);
+    overflow: hidden;
+}
+
+.results__bar-fill {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: var(--pp-blue-subtle);
+    transform-origin: left;
+    animation: pp-grow 0.5s ease-out both;
+}
+
+.results__bar--top .results__bar-fill {
+    background: var(--pp-accent);
+}
+
+.results__bar-count {
+    text-align: right;
     font-size: 12px;
     color: var(--pp-subtle);
+}
+
+@keyframes pp-flip {
+    from {
+        opacity: 0;
+        transform: rotateY(90deg);
+    }
+    to {
+        opacity: 1;
+        transform: rotateY(0);
+    }
+}
+
+@keyframes pp-grow {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
+}
+
+/* People who've asked their system for less motion get no flip or growth. */
+@media (prefers-reduced-motion: reduce) {
+    .result-card,
+    .results__bar-fill {
+        animation: none;
+    }
 }
 
 /* Empty / start state */

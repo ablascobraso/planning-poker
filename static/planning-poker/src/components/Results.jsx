@@ -30,11 +30,59 @@ export function summarise(votes) {
     };
 }
 
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+// The winning value drawn as a playing card in Atlassian blue, with the value
+// repeated small in two corners like a real card. It flips in on reveal; ties
+// show each tied card, flipping in one after another.
+function ResultCard({ card, small, order }) {
+    return (
+        <span
+            className={`result-card${small ? ' result-card--small' : ''}`}
+            style={{ animationDelay: `${order * 90}ms` }}
+        >
+            <span className="result-card__pip result-card__pip--top" aria-hidden="true">
+                {card}
+            </span>
+            {card}
+            <span className="result-card__pip result-card__pip--bottom" aria-hidden="true">
+                {card}
+            </span>
+        </span>
+    );
+}
+
+// What a revealed round came to, highlighted in Jira's brand blue: the winning
+// card up front, a one-line verdict, and - when the votes differ - a bar per
+// card showing its share. Hovering a bar shows who played that card.
 export default function Results({ votes }) {
     const { distribution, average, consensus } = useMemo(() => summarise(votes), [votes]);
 
+    if (distribution.length === 0) {
+        return null;
+    }
+
+    const topCount = distribution[0].count;
+    const leaders = distribution.filter(({ count }) => count === topCount);
+    const tied = leaders.length > 1;
+    const total = votes.length;
+    const averageText = average !== null ? ` · average ${average}` : '';
+
+    let headline;
+    let detail;
+    if (consensus) {
+        headline = 'Everyone agrees';
+        detail = plural(total, 'vote');
+    } else if (tied) {
+        headline = 'Tied';
+        detail = `${plural(topCount, 'vote')} each${averageText}`;
+    } else {
+        headline = 'Most votes';
+        detail = `${topCount} of ${plural(total, 'vote')}${averageText}`;
+    }
+
     return (
-        <div className="results">
+        <section className="results" aria-label="Results">
             <div className="results__head">
                 <h3 className="section-title">Results</h3>
                 {consensus ? (
@@ -44,18 +92,38 @@ export default function Results({ votes }) {
                 )}
             </div>
 
-            <div className="distribution">
-                {distribution.map(({ card, count, names }) => (
-                    <div key={card} className="distribution__item" title={names.join(', ')}>
-                        <span className="distribution__card">{card}</span>
-                        <span className="distribution__count">
-                            {count} {count === 1 ? 'vote' : 'votes'}
-                        </span>
-                    </div>
-                ))}
+            <div className="results__hero">
+                <div className="results__cards">
+                    {leaders.map(({ card }, order) => (
+                        <ResultCard key={card} card={card} small={tied} order={order} />
+                    ))}
+                </div>
+                <div className="results__caption">
+                    <span className="results__headline">{headline}</span>
+                    <span className="results__detail">{detail}</span>
+                </div>
             </div>
 
-            {average !== null && <p className="muted">Average of numeric votes: {average}</p>}
-        </div>
+            {!consensus && (
+                <ul className="results__bars">
+                    {distribution.map(({ card, count, names }) => (
+                        <li
+                            key={card}
+                            className={`results__bar${count === topCount ? ' results__bar--top' : ''}`}
+                            title={names.join(', ')}
+                        >
+                            <span className="results__bar-card">{card}</span>
+                            <span className="results__bar-track">
+                                <span
+                                    className="results__bar-fill"
+                                    style={{ width: `${(count / total) * 100}%` }}
+                                />
+                            </span>
+                            <span className="results__bar-count">{plural(count, 'vote')}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
     );
 }
