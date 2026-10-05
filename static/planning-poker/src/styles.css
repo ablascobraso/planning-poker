@@ -724,7 +724,46 @@ body {
 /* Earlier rounds of this session, under the current one */
 .history {
     border-top: 1px solid var(--pp-border);
-    padding-top: 16px;
+    padding-top: 12px;
+}
+
+/* The collapsed "Earlier rounds (n)" line, with a small arrow instead of the
+   browser's own marker; the arrow turns down while open. */
+.history__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    list-style: none;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pp-subtle);
+}
+
+.history__toggle::-webkit-details-marker {
+    display: none;
+}
+
+.history__toggle::before {
+    content: '';
+    border-left: 5px solid currentColor;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.15s ease;
+}
+
+.history[open] .history__toggle::before {
+    transform: rotate(90deg);
+}
+
+.history__toggle:hover {
+    color: var(--pp-text);
+}
+
+.history[open] .history__rounds {
+    margin-top: 8px;
 }
 
 .history__rounds {
