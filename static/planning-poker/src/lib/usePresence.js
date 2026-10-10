@@ -98,6 +98,32 @@ function parse(payload) {
     }
 }
 
+// "Just watching" is a per-person preference (a product owner who listens but
+// doesn't estimate), so it's remembered in this browser and carries over to
+// the next issue. Browser storage can be unavailable (private windows, blocked
+// site data); then the choice simply lasts until the page is closed.
+const WATCHING_KEY = 'planning-poker:watching';
+
+function loadWatching() {
+    try {
+        return window.localStorage.getItem(WATCHING_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+function saveWatching(watching) {
+    try {
+        if (watching) {
+            window.localStorage.setItem(WATCHING_KEY, '1');
+        } else {
+            window.localStorage.removeItem(WATCHING_KEY);
+        }
+    } catch {
+        // Not remembered; it still applies for as long as the page is open.
+    }
+}
+
 // Logs instead of throwing: a lost presence event degrades to a slightly stale
 // "who's here" list, which the next heartbeat corrects.
 function send(event) {
@@ -119,7 +145,11 @@ function send(event) {
 // - ready:   presence is up (subscribed and announced). Until then, nobody's
 //            absence means anything, so callers shouldn't draw conclusions.
 // - present: the people here, one entry per account, sorted by name so every
-//            viewer sees the same order.
+//            viewer sees the same order. Each says whether that person is
+//            `watching` (see below).
+// - watching / setWatching: whether this viewer is "just watching" - here,
+//            but not voting, so nobody waits for them and auto-reveal doesn't
+//            count them. It's announced to the others with every message.
 // - rank:    this tab's position among all tabs on the issue (0 = first). Lets
 //            the tabs agree on who acts first without talking to each other.
 // - hold / holdAutoReveal: the one shared signal the room needs besides
@@ -131,8 +161,10 @@ export function usePresence(enabled, issueId) {
     const [me, setMe] = useState(null);
     const [ready, setReady] = useState(false);
     const [hold, setHold] = useState(null);
+    const [watching, setWatchingState] = useState(loadWatching);
     const clientIdRef = useRef(null);
     const issueRef = useRef(issueId ?? null);
+    const watchingRef = useRef(watching);
     const announceRef = useRef(null);
 
     if (!clientIdRef.current) {
@@ -171,7 +203,12 @@ export function usePresence(enabled, issueId) {
             if (event.type === 'here') {
                 const person = personFrom(event.user);
                 if (person) {
-                    const entry = { person, issueId: issueIdFrom(event.issueId), seenAt: Date.now() };
+                    const entry = {
+                        person,
+                        issueId: issueIdFrom(event.issueId),
+                        watching: event.watching === true,
+                        seenAt: Date.now(),
+                    };
                     setOthers((prev) => new Map(prev).set(event.clientId, entry));
                 }
             } else if (event.type === 'leave') {
@@ -183,7 +220,13 @@ export function usePresence(enabled, issueId) {
 
         const announce = () => {
             if (self) {
-                send({ type: 'here', clientId, user: self, issueId: issueRef.current });
+                send({
+                    type: 'here',
+                    clientId,
+                    user: self,
+                    issueId: issueRef.current,
+                    watching: watchingRef.current,
+                });
             }
         };
 
@@ -259,25 +302,51 @@ export function usePresence(enabled, issueId) {
         };
     }, [enabled]);
 
-    // Moving to another issue (refinement page) is announced at once, so the
-    // others' "who's here" follows without waiting for the next heartbeat.
+    // Moving to another issue (refinement page), or switching between voting and
+    // watching, is announced at once, so the others' "who's here" follows
+    // without waiting for the next heartbeat.
     useEffect(() => {
         issueRef.current = issueId ?? null;
+        watchingRef.current = watching;
         announceRef.current?.();
-    }, [issueId]);
+    }, [issueId, watching]);
+
+    const setWatching = useCallback((next) => {
+        saveWatching(next);
+        setWatchingState(next);
+    }, []);
+
+    // The choice is per person, so other tabs of this app in the same browser
+    // (say, the issue panel and the refinement page) follow it straight away.
+    useEffect(() => {
+        const onStorage = (event) => {
+            if (event.key === WATCHING_KEY) {
+                setWatchingState(event.newValue === '1');
+            }
+        };
+        window.addEventListener('storage', onStorage);
+        return () => window.removeEventListener('storage', onStorage);
+    }, []);
 
     const { present, rank } = useMemo(() => {
         const target = issueId ?? null;
         const here = target ? [...others].filter(([, entry]) => entry.issueId === target) : [];
 
+        // One entry per account. Someone with several tabs on this issue only
+        // counts as watching if every one of those tabs is.
         const people = new Map();
+        const add = (person, isWatching) => {
+            const known = people.get(person.accountId);
+            people.set(person.accountId, {
+                ...(known ?? person),
+                watching: known ? known.watching && isWatching : isWatching,
+            });
+        };
         if (ready && me && target) {
-            people.set(me.accountId, me);
+            add(me, watching);
         }
-        for (const [, { person }] of here) {
-            if (!people.has(person.accountId)) {
-                people.set(person.accountId, person);
-            }
+        for (const [, entry] of here) {
+            add(entry.person, entry.watching);
         }
 
         const tabs = [clientIdRef.current, ...here.map(([id]) => id)].sort();
@@ -286,7 +355,7 @@ export function usePresence(enabled, issueId) {
             present: [...people.values()].sort((a, b) => a.name.localeCompare(b.name)),
             rank: Math.max(0, tabs.indexOf(clientIdRef.current)),
         };
-    }, [others, me, ready, issueId]);
+    }, [others, me, ready, issueId, watching]);
 
     // issueId says which issue the hold is for, because the channel covers the
     // whole project.
@@ -296,5 +365,5 @@ export function usePresence(enabled, issueId) {
         send({ type: 'hold', clientId: clientIdRef.current, issueId: target, round });
     }, []);
 
-    return { ready, present, rank, hold, holdAutoReveal };
+    return { ready, present, rank, hold, holdAutoReveal, watching, setWatching };
 }

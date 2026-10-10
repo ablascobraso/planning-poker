@@ -45,6 +45,15 @@ function Status({ row, revealed, isFacilitator }) {
         );
     }
 
+    // Here, but not voting - nobody waits for them (see usePresence).
+    if (row.watching) {
+        return (
+            <span className="voter__watching" title="Just watching, not voting">
+                Watching
+            </span>
+        );
+    }
+
     // A facilitator runs the meeting and may not vote, so nobody waits for them.
     if (isFacilitator) {
         return <span className="voter__card" />;

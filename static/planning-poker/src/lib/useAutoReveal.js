@@ -24,6 +24,10 @@ const MIN_ROOM_SIZE = 2;
 // Led sessions never auto-reveal: their facilitator decides when. They still
 // report everyoneVoted, so the facilitator can be told it's time. And since the
 // facilitator runs the meeting and may not vote, nobody waits for them.
+//
+// People who are "just watching" (see usePresence) aren't voters either: nobody
+// waits for them, and they're left out of what auto-reveal asks the server to
+// check - otherwise it would wait for votes that are never coming.
 export function useAutoReveal({ session, votes, actions }, presence, issueId) {
     const round = session?.round ?? null;
     const open = Boolean(session) && !session.revealed;
@@ -35,7 +39,9 @@ export function useAutoReveal({ session, votes, actions }, presence, issueId) {
     const group = open && presence.ready && presence.present.length >= MIN_ROOM_SIZE;
 
     const voted = new Set(votes.map((vote) => vote.accountId));
-    const voters = presence.present.filter((person) => person.accountId !== facilitator);
+    const voters = presence.present.filter(
+        (person) => person.accountId !== facilitator && !person.watching
+    );
     const waitingFor = group ? voters.filter((person) => !voted.has(person.accountId)) : [];
     const everyoneVoted = group && voters.length > 0 && waitingFor.length === 0;
 
@@ -43,7 +49,9 @@ export function useAutoReveal({ session, votes, actions }, presence, issueId) {
         presence.hold && presence.hold.round === round && presence.hold.issueId === (issueId ?? null)
     );
 
-    const armed = everyoneVoted && !led && !held;
+    // At least two people must actually be voting: with only watchers around,
+    // a lone voter's card would otherwise flip the moment they picked it.
+    const armed = everyoneVoted && voters.length >= MIN_ROOM_SIZE && !led && !held;
 
     const [deadline, setDeadline] = useState(null);
     const [now, setNow] = useState(() => Date.now());
@@ -51,7 +59,7 @@ export function useAutoReveal({ session, votes, actions }, presence, issueId) {
     // The timers below outlive individual renders, so they read the latest
     // values from here rather than from the render that started them.
     const latest = useRef(null);
-    latest.current = { actions, round, accountIds: presence.present.map((person) => person.accountId) };
+    latest.current = { actions, round, accountIds: voters.map((person) => person.accountId) };
 
     useEffect(() => {
         if (!armed) {

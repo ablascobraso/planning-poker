@@ -964,3 +964,36 @@ body {
     pointer-events: none;
     z-index: 100;
 }
+
+/* A section title with a small action on the right ("Your card" · "Just watching") */
+.section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.link--subtle {
+    color: var(--pp-subtle);
+    font-size: 12px;
+}
+
+.link--subtle:hover {
+    color: var(--pp-accent);
+}
+
+/* Replaces the deck while the viewer is just watching */
+.watching-note {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: var(--pp-radius);
+    background: var(--pp-surface-raised);
+    color: var(--pp-subtle);
+    font-size: 13px;
+}
+
+/* "Watching" in Who's here, where a voter would show ✓ or … */
+.voter__watching {
+    font-size: 12px;
+    color: var(--pp-subtle);
+}

@@ -211,10 +211,10 @@ export default function SessionView({
     const canTakeOver = led && !leading && presence.ready && !facilitatorHere;
 
     // "3 of 5 voted" counts everyone here plus anyone who voted and left - except
-    // a facilitator who isn't voting. Without working presence there's nobody to
-    // count against, so it's just "3 voted".
+    // people who are just watching and a facilitator who isn't voting. Without
+    // working presence there's nobody to count against, so it's just "3 voted".
     const everyone = new Set([
-        ...presence.present.map((person) => person.accountId),
+        ...presence.present.filter((person) => !person.watching).map((person) => person.accountId),
         ...votes.map((vote) => vote.accountId),
     ]);
     if (led && !votes.some((vote) => vote.accountId === session.facilitator)) {
@@ -310,13 +310,38 @@ export default function SessionView({
 
                     {!revealed && (
                         <section>
-                            <h3 className="section-title">Your card</h3>
-                            <Deck
-                                cards={cards}
-                                myVote={myVote}
-                                disabled={busy}
-                                onPick={actions.vote}
-                            />
+                            <div className="section-head">
+                                <h3 className="section-title">Your card</h3>
+                                {!presence.watching && (
+                                    <button
+                                        type="button"
+                                        className="link link--subtle"
+                                        title="Stay in the session without voting: nobody waits for you"
+                                        onClick={() => presence.setWatching(true)}
+                                    >
+                                        Just watching
+                                    </button>
+                                )}
+                            </div>
+                            {presence.watching ? (
+                                <p className="watching-note">
+                                    You're just watching, so nobody waits for your vote.{' '}
+                                    <button
+                                        type="button"
+                                        className="link"
+                                        onClick={() => presence.setWatching(false)}
+                                    >
+                                        Vote instead
+                                    </button>
+                                </p>
+                            ) : (
+                                <Deck
+                                    cards={cards}
+                                    myVote={myVote}
+                                    disabled={busy}
+                                    onPick={actions.vote}
+                                />
+                            )}
                         </section>
                     )}
 
