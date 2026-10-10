@@ -7,12 +7,16 @@
   "private": true,
   "scripts": {
     "build": "npm --prefix static/planning-poker run build",
-    "install:ui": "npm --prefix static/planning-poker install"
+    "install:ui": "npm --prefix static/planning-poker install",
+    "test": "vitest run"
   },
   "dependencies": {
     "@forge/api": "8.1.0",
     "@forge/kvs": "2.0.6",
     "@forge/realtime": "1.0.1",
     "@forge/resolver": "2.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
   }
 }

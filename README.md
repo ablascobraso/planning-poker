@@ -78,6 +78,9 @@ src/
   lib/estimation.js          Estimation fields: detection, space admin check, saving to Jira
   lib/issues.js              Jira issue search and access checks
   lib/scales.js              Decks
+test/
+  *.test.js                  Tests for the backend rules (run with npm test)
+  fakes/                     In-memory stand-ins for Forge's storage, realtime and Jira APIs
 static/planning-poker/
   src/App.jsx                Chooses the issue panel, refinement page or settings page
   src/components/            UI components
@@ -113,6 +116,12 @@ A change to the scopes in `manifest.yml` makes a new major version: `forge deplo
 ```bash
 forge install --site <your-site>.atlassian.net --product jira -e development
 forge install --upgrade --site <your-site>.atlassian.net --product jira -e development
+```
+
+Run the tests. They cover the backend's core rules: no card leaves the server before the reveal, facilitator controls, auto-reveal's re-check, what may be saved to Jira, switching issues on the refinement page, the space settings admin check and session expiry. They run the real resolvers against in-memory fakes of Forge's storage, realtime and Jira APIs (`test/fakes`), so they need no Forge site:
+
+```bash
+npm test
 ```
 
 Read the app's logs:

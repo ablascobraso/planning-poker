@@ -172,7 +172,10 @@ export async function saveFieldValue(issueId, field, value) {
     let reason = '';
     try {
         const body = await response.json();
-        reason = body?.errors?.[field.id] ?? body?.errorMessages?.[0] ?? '';
+        // Jira's reasons usually end with a full stop; ours adds its own.
+        reason = String(body?.errors?.[field.id] ?? body?.errorMessages?.[0] ?? '')
+            .trim()
+            .replace(/\.+$/, '');
     } catch {
         // No readable reason; the generic message below has to do.
     }
