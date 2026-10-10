@@ -571,7 +571,8 @@ body {
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-areas:
         'key status'
-        'summary summary';
+        'summary summary'
+        'estimates estimates';
     gap: 2px 8px;
     padding: 8px 10px;
     border: none;
@@ -996,4 +997,133 @@ body {
 .voter__watching {
     font-size: 12px;
     color: var(--pp-subtle);
+}
+
+/* Queue row: the values already saved to the space's estimation fields */
+.issue__estimates {
+    grid-area: estimates;
+    font-size: 11px;
+    color: var(--pp-selected-text);
+}
+
+/* Saving the estimate, at the bottom of the results panel */
+.save {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--pp-border);
+}
+
+.save__options {
+    display: flex;
+    gap: 6px;
+}
+
+.save__option {
+    min-width: 36px;
+    padding: 4px 8px;
+    border: 1px solid var(--pp-border);
+    border-radius: var(--pp-radius);
+    background: var(--pp-surface);
+    color: var(--pp-text);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.save__option--selected {
+    border-color: var(--pp-accent);
+    box-shadow: inset 0 0 0 1px var(--pp-accent);
+    color: var(--pp-selected-text);
+}
+
+.save--done .save__done {
+    font-weight: 600;
+    color: var(--pp-ok-text);
+}
+
+.save__note {
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--pp-border);
+    font-size: 13px;
+    color: var(--pp-subtle);
+}
+
+/* Space settings: where estimates are saved */
+.settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 640px;
+    padding: 16px 4px;
+}
+
+.settings__intro {
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.settings__auto {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: var(--pp-radius);
+    background: var(--pp-surface-raised);
+    font-size: 13px;
+}
+
+.settings__fields {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.settings__field {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-left: 3px solid var(--pp-accent);
+    border-radius: var(--pp-radius);
+    background: var(--pp-selected-bg);
+}
+
+.settings__order {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--pp-subtle);
+}
+
+.settings__name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.settings__add {
+    max-width: 320px;
+}
+
+.settings__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* A chosen field that isn't used on the space's issues */
+.settings__field--unused {
+    border-left-color: var(--pp-danger-text);
+    background: var(--pp-danger-bg);
+}
+
+.settings__warning {
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--pp-danger-text);
 }

@@ -1,6 +1,13 @@
 import { broadcast, EVENTS } from '../lib/events';
 import { fetchIssues, requireIssueInProject, searchIssues } from '../lib/issues';
-import { readFocus, readQueue, readSession, writeFocus, writeQueue } from '../lib/store';
+import {
+    readEstimationFields,
+    readFocus,
+    readQueue,
+    readSession,
+    writeFocus,
+    writeQueue,
+} from '../lib/store';
 import { handle, requireLead } from './session';
 
 // Resolvers for the project-level refinement page. Voting itself reuses the
@@ -22,8 +29,11 @@ function projectOf(req) {
 
 // The queue with live details, in queue order. Issues the viewer can't see, or
 // that were deleted or moved to another space, simply don't appear.
+// Each row also carries the issue's current values in the space's estimation
+// fields (if it has any yet), so the queue shows what's already been saved.
 async function queueDetails(projectId, issueIds) {
-    const issues = await fetchIssues(projectId, issueIds);
+    const estimation = await readEstimationFields(projectId);
+    const issues = await fetchIssues(projectId, issueIds, estimation?.fields ?? []);
     const byId = new Map(issues.map((issue) => [issue.id, issue]));
     return issueIds.map((id) => byId.get(id)).filter(Boolean);
 }

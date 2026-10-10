@@ -21,7 +21,9 @@ export function sessionApi(issueId) {
         // withToken: also return a live-update token (see useSession).
         getState: (withToken = false) => call('getState', { issueId, withToken }),
         // led: only the person starting the session may then reveal and move on.
-        startSession: (scale, led) => call('startSession', { issueId, scale, led }),
+        // targetIndex: which of the space's estimation fields this session is for.
+        startSession: (scale, led, targetIndex = 0) =>
+            call('startSession', { issueId, scale, led, targetIndex }),
         castVote: (card) => call('castVote', { issueId, card }),
         reveal: () => call('reveal', { issueId }),
         // round and accountIds describe what this browser saw: everyone in the
@@ -30,10 +32,16 @@ export function sessionApi(issueId) {
         revote: () => call('revote', { issueId }),
         endSession: () => call('endSession', { issueId }),
         takeOver: () => call('takeOver', { issueId }),
+        // value: the card to save to the session's estimation field.
+        saveEstimate: (value) => call('saveEstimate', { issueId, value }),
     };
 }
 
 export const getRefinement = () => call('getRefinement');
+
+// The space settings page: which fields estimates are saved to.
+export const getEstimationSettings = () => call('getEstimationSettings');
+export const saveEstimationSettings = (fieldIds) => call('saveEstimationSettings', { fieldIds });
 export const setFocus = (issueId) => call('setFocus', { issueId });
 export const searchIssues = (text, chip, pageToken) =>
     call('searchIssues', { text, chip, pageToken });

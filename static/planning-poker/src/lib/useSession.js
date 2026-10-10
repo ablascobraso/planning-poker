@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Jira, realtime } from '@forge/bridge';
+import { Jira, realtime, view } from '@forge/bridge';
 
 import { sessionApi } from './api';
 
@@ -26,6 +26,8 @@ const EMPTY = {
     myVote: null,
     // Earlier revealed rounds of this session, oldest first (see session.js).
     history: [],
+    // The fields a new session would save its estimates to (start screen).
+    targets: [],
     defaultScale: null,
     defaultLed: false,
 };
@@ -92,6 +94,24 @@ export function useSession(issueId) {
 
     useEffect(() => () => clearTimeout(retryTimer.current), []);
 
+    // After an estimate is saved, the issue panel asks Jira to reload the issue
+    // (view.refresh), so the field shows its new value without reloading the
+    // page. It happens for the person saving and, through the "saved" event,
+    // for everyone else on the issue. The refinement page has no issue view to
+    // reload (issueId is set there), so it skips this. Each save is reloaded
+    // once, however many times it's reported.
+    const refreshedSave = useRef(null);
+    const showSavedInJira = useCallback(
+        (saved) => {
+            if (issueId || !saved?.savedAt || refreshedSave.current === saved.savedAt) {
+                return;
+            }
+            refreshedSave.current = saved.savedAt;
+            view.refresh().catch((err) => console.warn('issue view refresh unavailable', err));
+        },
+        [issueId]
+    );
+
     // Wraps the one-off actions so every button gets the same busy/error handling.
     const run = useCallback(async (action) => {
         setBusy(true);
@@ -116,6 +136,10 @@ export function useSession(issueId) {
         const onEvent = (payload) => {
             if (!payload || typeof payload !== 'object') {
                 return;
+            }
+
+            if (payload.type === 'saved') {
+                showSavedInJira(payload.saved);
             }
 
             // The token already limits events to this issue; this is a cheap
@@ -155,6 +179,9 @@ export function useSession(issueId) {
                                 led: payload.led === true,
                                 facilitator: payload.facilitator,
                                 facilitatorName: payload.facilitatorName ?? null,
+                                targets: payload.targets ?? [],
+                                targetIndex: payload.targetIndex ?? 0,
+                                saved: null,
                             },
                         };
 
@@ -185,8 +212,19 @@ export function useSession(issueId) {
                             ...prev,
                             votes: [],
                             myVote: null,
-                            session: { ...prev.session, revealed: false, round: payload.round },
+                            session: {
+                                ...prev.session,
+                                revealed: false,
+                                round: payload.round,
+                                saved: null,
+                            },
                         };
+
+                    // An estimate was saved to the issue (by anyone).
+                    case 'saved':
+                        return prev.session
+                            ? { ...prev, session: { ...prev.session, saved: payload.saved } }
+                            : prev;
 
                     case 'ended':
                         return {
@@ -196,6 +234,9 @@ export function useSession(issueId) {
                             defaultScale: prev.defaultScale ?? prev.session?.scale ?? null,
                             // The ended session's choice is the space's latest default.
                             defaultLed: prev.session ? prev.session.led === true : prev.defaultLed,
+                            // Its fields are the space's, so the start screen can keep
+                            // saying where the next session saves to.
+                            targets: prev.session?.targets ?? prev.targets,
                         };
 
                     // Someone took over a led session.
@@ -239,10 +280,21 @@ export function useSession(issueId) {
             active = false;
             subscription?.unsubscribe();
         };
-    }, [refresh, issueId, live]);
+    }, [refresh, issueId, live, showSavedInJira]);
 
     const actions = {
         start: (scale, led) => run(() => api.startSession(scale, led)),
+        // Starts a fresh session on the same issue for the space's next
+        // estimation field ("Next: QA estimate"), keeping the deck and lead choice.
+        nextTarget: () => {
+            const { scale, led, targetIndex = 0 } = state.session ?? {};
+            return run(() => api.startSession(scale, led, targetIndex + 1));
+        },
+        saveEstimate: async (value) => {
+            const data = await run(() => api.saveEstimate(value));
+            showSavedInJira(data?.session?.saved);
+            return data;
+        },
         vote: (card) => run(() => api.castVote(card)),
         reveal: () => run(api.reveal),
         autoReveal: (round, accountIds) => run(() => api.autoReveal(round, accountIds)),

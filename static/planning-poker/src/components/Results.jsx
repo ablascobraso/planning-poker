@@ -63,7 +63,8 @@ const MIN_VOTES_TO_CELEBRATE = 2;
 // card showing its share. Hovering a bar shows who played that card.
 // justRevealed: this screen saw the reveal happen (see SessionView), so a
 // consensus earns a little confetti from the result card.
-export default function Results({ votes, justRevealed = false }) {
+// children: shown at the bottom of the panel (saving the estimate).
+export default function Results({ votes, justRevealed = false, children }) {
     const { distribution, average, consensus } = useMemo(() => summarise(votes), [votes]);
     const cardsRef = useRef(null);
 
@@ -138,6 +139,8 @@ export default function Results({ votes, justRevealed = false }) {
                     ))}
                 </ul>
             )}
+
+            {children}
         </section>
     );
 }

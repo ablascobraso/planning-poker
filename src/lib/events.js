@@ -31,6 +31,7 @@ export const EVENTS = {
     RESET: 'reset',
     ENDED: 'ended',
     LEAD: 'lead',
+    SAVED: 'saved',
     FOCUS: 'focus',
     QUEUE: 'queue',
 };

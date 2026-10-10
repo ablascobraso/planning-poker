@@ -29,6 +29,13 @@ export const isValidScale = (scaleId) =>
 export const isValidCard = (scaleId, card) =>
     isValidScale(scaleId) && SCALES[scaleId].cards.includes(card);
 
+// The number a card stands for when saved to a Jira field, or null for cards
+// that aren't numbers ("?", "☕", T-shirt sizes).
+export function cardNumber(card) {
+    const value = card === '½' ? 0.5 : Number(card);
+    return typeof card === 'string' && card !== '' && Number.isFinite(value) ? value : null;
+}
+
 export const cardsFor = (scaleId) =>
     isValidScale(scaleId) ? SCALES[scaleId].cards : SCALES[DEFAULT_SCALE].cards;
 

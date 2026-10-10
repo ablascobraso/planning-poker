@@ -4,13 +4,32 @@ import Deck from './Deck';
 import Participants from './Participants';
 import Results from './Results';
 import RoundHistory from './RoundHistory';
+import SaveEstimate from './SaveEstimate';
 
 const deckLabel = ({ label, cards }) => `${label} (${cards.join(', ')})`;
 
 // Once a Jira space has used a deck, it's preselected and shown as a summary, so
 // starting is one click; "Change" brings the picker back for this session. The
 // "Lead this session" choice is remembered per space the same way.
-function StartScreen({ scales, defaultScale, defaultLed, busy, onStart }) {
+// "Saves to Story points", or for a space that estimates several fields
+// "Estimating Dev estimate, then QA estimate and Story points".
+function targetsLine(targets) {
+    const names = targets.map((target) => target.name);
+
+    if (names.length === 0) {
+        return null;
+    }
+
+    if (names.length === 1) {
+        return `Saves to ${names[0]}`;
+    }
+
+    const rest = names.slice(1);
+    const then = rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(', ')} and ${rest.at(-1)}`;
+    return `Estimating ${names[0]}, then ${then}`;
+}
+
+function StartScreen({ scales, defaultScale, defaultLed, targets, busy, onStart }) {
     const remembered = scales.find((option) => option.id === defaultScale);
     const [scale, setScale] = useState(remembered?.id ?? scales[0]?.id ?? 'fibonacci');
     const [picking, setPicking] = useState(!remembered);
@@ -79,6 +98,8 @@ function StartScreen({ scales, defaultScale, defaultLed, busy, onStart }) {
                     </span>
                 </span>
             </label>
+
+            {targetsLine(targets) && <p className="muted">{targetsLine(targets)}</p>}
 
             {picking && (
                 <p className="muted">
@@ -170,6 +191,7 @@ export default function SessionView({
     scales,
     defaultScale,
     defaultLed,
+    targets,
     votes,
     myVote,
     history,
@@ -225,6 +247,10 @@ export default function SessionView({
             ? `${votes.length} of ${everyone.size} voted`
             : `${votes.length} voted`;
 
+    // The field this session's estimate is saved to, so everyone knows what
+    // they're estimating ("Round 1 · 2 of 4 voted · Dev estimate").
+    const targetName = session?.targets?.[session.targetIndex ?? 0]?.name ?? null;
+
     const leadLabel = leading
         ? " · You're leading"
         : ` · Led by ${session?.facilitatorName ?? 'the facilitator'}`;
@@ -245,6 +271,7 @@ export default function SessionView({
                     scales={scales}
                     defaultScale={defaultScale}
                     defaultLed={defaultLed}
+                    targets={targets ?? []}
                     busy={busy}
                     onStart={actions.start}
                 />
@@ -257,6 +284,7 @@ export default function SessionView({
                             </h2>
                             <p className="muted">
                                 Round {session.round} · {revealed ? 'Revealed' : votedLabel}
+                                {targetName && ` · ${targetName}`}
                                 {led && leadLabel}
                             </p>
                         </div>
@@ -360,7 +388,15 @@ export default function SessionView({
                     </section>
 
                     {revealed && (
-                        <Results votes={votes} justRevealed={openRound.current === session.round} />
+                        <Results votes={votes} justRevealed={openRound.current === session.round}>
+                            <SaveEstimate
+                                session={session}
+                                votes={votes}
+                                inControl={inControl}
+                                busy={busy}
+                                actions={actions}
+                            />
+                        </Results>
                     )}
 
                     <RoundHistory history={history} currentRound={session.round} />

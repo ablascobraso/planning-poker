@@ -3,6 +3,7 @@ import { view } from '@forge/bridge';
 
 import RefinementPage from './components/RefinementPage';
 import SessionView from './components/SessionView';
+import SettingsPage from './components/SettingsPage';
 import { useAutoReveal } from './lib/useAutoReveal';
 import { usePresence } from './lib/usePresence';
 import { useSession } from './lib/useSession';
@@ -41,5 +42,13 @@ export default function App() {
         return <div className="shell shell--centered muted">Loading…</div>;
     }
 
-    return moduleType === 'jira:projectPage' ? <RefinementPage /> : <IssuePanel />;
+    if (moduleType === 'jira:projectPage') {
+        return <RefinementPage />;
+    }
+
+    if (moduleType === 'jira:projectSettingsPage') {
+        return <SettingsPage />;
+    }
+
+    return <IssuePanel />;
 }

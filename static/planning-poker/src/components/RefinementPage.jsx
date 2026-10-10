@@ -10,7 +10,8 @@ import SessionView from './SessionView';
 
 // onLockChange tells the page who (if anyone else) leads this issue's session:
 // while someone else leads it, only they may move everyone to another issue.
-function FocusedSession({ issueId, presence, onLockChange }) {
+// onEstimateSaved tells it an estimate was saved, so the queue row can show it.
+function FocusedSession({ issueId, presence, onLockChange, onEstimateSaved }) {
     const state = useSession(issueId);
     const autoReveal = useAutoReveal(state, presence, issueId);
 
@@ -25,10 +26,27 @@ function FocusedSession({ issueId, presence, onLockChange }) {
     // Leaving this issue releases the lock it reported.
     useEffect(() => () => onLockChange(null), [onLockChange]);
 
+    // Reported once per save, however often this view re-renders.
+    const saved = session?.saved ?? null;
+    const reported = useRef(null);
+    useEffect(() => {
+        if (saved && reported.current !== saved.savedAt) {
+            reported.current = saved.savedAt;
+            onEstimateSaved(issueId, saved);
+        }
+    }, [saved, issueId, onEstimateSaved]);
+
     return <SessionView {...state} presence={presence} autoReveal={autoReveal} />;
 }
 
 const CONFIRM_WINDOW_MS = 3000;
+
+// "Dev estimate 3 · QA estimate 2 · Story points 5" - the values already saved
+// to the space's estimation fields, or null if none yet.
+function estimatesText(issue) {
+    const saved = (issue.estimates ?? []).filter((estimate) => estimate.value !== null);
+    return saved.length > 0 ? saved.map((estimate) => `${estimate.name} ${estimate.value}`).join(' · ') : null;
+}
 
 // A project page for refinement meetings. The team builds a hand-picked queue of
 // issues and works down it, estimating each one in its own independent session.
@@ -51,6 +69,37 @@ export default function RefinementPage() {
     const announcedIssueId = queue.some((issue) => issue.id === focusId) ? focusId : null;
     const presence = usePresence(true, announcedIssueId);
 
+    // A saved estimate updates its queue row at once. If the row doesn't list
+    // that field yet (the space's fields were only just set up), the queue is
+    // reloaded with them instead. The refs keep this callback stable, so the
+    // session view doesn't re-report a save just because the queue changed.
+    const queueRef = useRef(queue);
+    queueRef.current = queue;
+    const loadRef = useRef(null);
+
+    const onEstimateSaved = useCallback((issueId, saved) => {
+        const row = queueRef.current.find((issue) => issue.id === issueId);
+        const listed = row?.estimates?.some((estimate) => estimate.id === saved.fieldId);
+
+        if (!listed) {
+            loadRef.current?.();
+            return;
+        }
+
+        setQueue((current) =>
+            current.map((issue) =>
+                issue.id !== issueId
+                    ? issue
+                    : {
+                          ...issue,
+                          estimates: issue.estimates.map((estimate) =>
+                              estimate.id === saved.fieldId ? { ...estimate, value: saved.value } : estimate
+                          ),
+                      }
+            )
+        );
+    }, []);
+
     // Name of whoever leads the current issue's session, when that isn't this
     // viewer. Switching issues is then theirs alone (the server enforces it too).
     const [lockedBy, setLockedBy] = useState(null);
@@ -66,6 +115,8 @@ export default function RefinementPage() {
             setLoading(false);
         }
     }, []);
+
+    loadRef.current = load;
 
     useEffect(() => {
         load();
@@ -229,6 +280,7 @@ export default function RefinementPage() {
                     issueId={focusId}
                     presence={presence}
                     onLockChange={setLockedBy}
+                    onEstimateSaved={onEstimateSaved}
                 />
             </>
         );
@@ -277,6 +329,9 @@ export default function RefinementPage() {
                                     <span className="issue__key">{issue.key}</span>
                                     <span className="issue__summary">{issue.summary}</span>
                                     <span className="issue__status">{issue.status}</span>
+                                    {estimatesText(issue) && (
+                                        <span className="issue__estimates">{estimatesText(issue)}</span>
+                                    )}
                                 </button>
                                 <button
                                     type="button"

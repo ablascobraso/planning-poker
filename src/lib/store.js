@@ -11,6 +11,7 @@ const sessionKey = (issueId) => `pp:s:${issueId}`;
 const focusKey = (projectId) => `pp:f:${projectId}`;
 const defaultsKey = (projectId) => `pp:d:${projectId}`;
 const queueKey = (projectId) => `pp:q:${projectId}`;
+const estimationKey = (projectId) => `pp:e:${projectId}`;
 const voteKey = (issueId, accountId) => `pp:v:${issueId}:${accountId}`;
 const votePrefix = (issueId) => `pp:v:${issueId}:`;
 
@@ -68,6 +69,32 @@ export async function readSpaceDefaults(projectId) {
 
 export async function writeSpaceDefaults(projectId, { scale, led }) {
     await kvs.set(defaultsKey(projectId), { scale, led, updatedAt: Date.now() });
+}
+
+// The issue fields a Jira space saves estimates to, in the order the team
+// estimates them: { fields: [{ id, name }], auto }. Either chosen by a space
+// admin on the settings page (auto: false, kept until changed), or the space's
+// story points field found automatically (auto: true). An automatic choice is
+// re-checked weekly, so a space that adds a story points field later - or
+// removes it - catches up without anyone configuring anything.
+const AUTO_DETECT_EXPIRY = { ttl: { unit: 'DAYS', value: 7 } };
+
+export async function readEstimationFields(projectId) {
+    return (await kvs.get(estimationKey(projectId))) ?? null;
+}
+
+export async function writeEstimationFields(projectId, { fields, auto }) {
+    const record = { fields, auto, updatedAt: Date.now() };
+    if (auto) {
+        await kvs.set(estimationKey(projectId), record, AUTO_DETECT_EXPIRY);
+    } else {
+        await kvs.set(estimationKey(projectId), record);
+    }
+}
+
+// Back to automatic: the next session detects the story points field again.
+export async function deleteEstimationFields(projectId) {
+    await kvs.delete(estimationKey(projectId));
 }
 
 // The space's hand-picked estimation queue: issue ids in the order they were

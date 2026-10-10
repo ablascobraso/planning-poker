@@ -19,7 +19,9 @@ const toIssue = ({ id, key, fields }) => ({
 // Details for specific issues (by id or key), keeping only ones in this space.
 // Bulk fetch skips ids/keys that don't exist or aren't visible instead of failing
 // the whole request, so a stale queue entry or a mistyped key just drops out.
-export async function fetchIssues(projectId, idsOrKeys) {
+// estimationFields ([{ id, name }], optional) adds each issue's current values
+// for those fields as `estimates`, for the refinement page's queue.
+export async function fetchIssues(projectId, idsOrKeys, estimationFields = []) {
     if (idsOrKeys.length === 0) {
         return [];
     }
@@ -29,7 +31,7 @@ export async function fetchIssues(projectId, idsOrKeys) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             issueIdsOrKeys: idsOrKeys,
-            fields: ['summary', 'status', 'project'],
+            fields: ['summary', 'status', 'project', ...estimationFields.map((field) => field.id)],
         }),
     });
 
@@ -38,7 +40,16 @@ export async function fetchIssues(projectId, idsOrKeys) {
     }
 
     const { issues = [] } = await response.json();
-    return issues.map(toIssue).filter((issue) => issue.projectId === String(projectId));
+    return issues
+        .map((raw) => ({
+            ...toIssue(raw),
+            estimates: estimationFields.map(({ id, name }) => ({
+                id,
+                name,
+                value: typeof raw.fields?.[id] === 'number' ? raw.fields[id] : null,
+            })),
+        }))
+        .filter((issue) => issue.projectId === String(projectId));
 }
 
 // Story points live in a custom field whose name and id differ per site (and

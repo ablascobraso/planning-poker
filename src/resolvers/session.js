@@ -1,8 +1,16 @@
 import api, { route } from '@forge/api';
 
+import { estimationTargets, saveFieldValue } from '../lib/estimation';
 import { broadcastToIssue, EVENTS, sessionToken } from '../lib/events';
 import { requireIssueInProject } from '../lib/issues';
-import { cardsFor, DEFAULT_SCALE, isValidCard, isValidScale, scaleOptions } from '../lib/scales';
+import {
+    cardNumber,
+    cardsFor,
+    DEFAULT_SCALE,
+    isValidCard,
+    isValidScale,
+    scaleOptions,
+} from '../lib/scales';
 import {
     clearVotes,
     deleteSession,
@@ -136,6 +144,8 @@ async function buildState(issueId, accountId, projectId) {
             history: [],
             defaultScale: isValidScale(defaults.scale) ? defaults.scale : null,
             defaultLed: defaults.led,
+            // The fields a new session would save its estimates to (see estimation.js).
+            targets: await estimationTargets(projectId, issueId),
         };
     }
 
@@ -151,6 +161,12 @@ async function buildState(issueId, accountId, projectId) {
             facilitator: session.facilitator,
             facilitatorName: session.facilitatorName ?? null,
             startedAt: session.startedAt,
+            // Saving estimates: the space's fields when the session started, the
+            // one this session estimates, and what has been saved to it this
+            // round. Older sessions have none, and simply don't offer saving.
+            targets: session.targets ?? [],
+            targetIndex: session.targetIndex ?? 0,
+            saved: session.saved ?? null,
         },
         cards: cardsFor(session.scale),
         scales: scaleOptions(),
@@ -235,6 +251,15 @@ export function defineSessionResolvers(resolver) {
             const scale = isValidScale(req.payload?.scale) ? req.payload.scale : DEFAULT_SCALE;
             const led = req.payload?.led === true;
 
+            // The fields this session can save to. "Next: QA estimate" starts the
+            // following session on the same issue with the next targetIndex.
+            const targets = await estimationTargets(projectId, issueId);
+            const requestedIndex = Number(req.payload?.targetIndex ?? 0);
+            const targetIndex =
+                Number.isInteger(requestedIndex) && requestedIndex >= 0 && requestedIndex < targets.length
+                    ? requestedIndex
+                    : 0;
+
             // Starting replaces whatever session is there, so a led one can only
             // be restarted by its facilitator. Start is hidden while a session
             // runs, but a tab that missed the "started" update could still show it.
@@ -260,6 +285,9 @@ export function defineSessionResolvers(resolver) {
                 startedAt: Date.now(),
                 // A new session starts a new history.
                 history: [],
+                targets,
+                targetIndex,
+                saved: null,
             };
             await writeSession(issueId, session);
 
@@ -270,6 +298,8 @@ export function defineSessionResolvers(resolver) {
                 led,
                 facilitator: accountId,
                 facilitatorName,
+                targets,
+                targetIndex,
             });
 
             return buildState(issueId, accountId);
@@ -384,7 +414,7 @@ export function defineSessionResolvers(resolver) {
 
             await clearVotes(issueId);
 
-            const next = { ...session, revealed: false, round: session.round + 1 };
+            const next = { ...session, revealed: false, round: session.round + 1, saved: null };
             await writeSession(issueId, next);
 
             await broadcastToIssue(issueId, EVENTS.RESET, { round: next.round });
@@ -405,6 +435,63 @@ export function defineSessionResolvers(resolver) {
             await broadcastToIssue(issueId, EVENTS.ENDED);
 
             return buildState(issueId, accountId, projectId);
+        })
+    );
+
+    // Saves the revealed round's agreed value to the session's estimation field
+    // on the Jira issue (see estimation.js). Allowed to the same people as Reveal
+    // - anyone, or only the facilitator in a led session - and only once the
+    // round is revealed. The value must be a number card somebody actually
+    // played this round. Jira itself then checks the person may edit the issue.
+    resolver.define(
+        'saveEstimate',
+        handle(async (req) => {
+            const { issueId, accountId } = await contextOf(req);
+            const session = await readSession(issueId);
+
+            if (!session) {
+                throw new Error('There is no session to save an estimate from.');
+            }
+
+            if (!session.revealed) {
+                throw new Error('Reveal the cards before saving the estimate.');
+            }
+
+            requireLead(session, accountId, 'save the estimate');
+
+            const target = session.targets?.[session.targetIndex ?? 0];
+
+            if (!target) {
+                throw new Error('This space has no field to save estimates to yet.');
+            }
+
+            const card = req.payload?.value;
+            const votes = await readVotes(issueId);
+            const value = cardNumber(card);
+
+            if (value === null || !votes.some((vote) => vote.card === card)) {
+                throw new Error('Pick one of the number cards played this round.');
+            }
+
+            await saveFieldValue(issueId, target, value);
+
+            const { name } = await currentUser();
+            const saved = {
+                fieldId: target.id,
+                fieldName: target.name,
+                card,
+                value,
+                round: session.round,
+                savedBy: name,
+                savedAt: Date.now(),
+            };
+            await writeSession(issueId, { ...session, saved });
+
+            // Everyone viewing the issue sees it saved, and their issue panels
+            // reload Jira's view of the issue so the field shows the new value.
+            await broadcastToIssue(issueId, EVENTS.SAVED, { round: session.round, saved });
+
+            return buildState(issueId, accountId);
         })
     );
 
