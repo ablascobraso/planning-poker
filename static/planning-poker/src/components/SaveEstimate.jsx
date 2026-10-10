@@ -14,6 +14,8 @@ const isNumberCard = (card) => card === '½' || Number.isFinite(Number(card));
 //   as one-click alternatives.
 // - after saving: "Saved 5 to Dev estimate", and if the space estimates more
 //   fields, "Next: QA estimate", which starts a fresh round for that field.
+//   A small "Re-estimate" link runs another round of the same field, for the
+//   rare correction; saving again overwrites the value in Jira.
 // Only those who can reveal (inControl) see the buttons; in a led session the
 // others are told the facilitator will save.
 export default function SaveEstimate({ session, votes, inControl, busy, actions }) {
@@ -48,6 +50,17 @@ export default function SaveEstimate({ session, votes, inControl, busy, actions 
                     </button>
                 )}
                 {!next && targets.length > 1 && <span className="muted">All estimates saved</span>}
+                {inControl && (
+                    <button
+                        type="button"
+                        className="link link--subtle"
+                        disabled={busy}
+                        title={`Vote on ${saved.fieldName} again; saving again replaces ${saved.card}`}
+                        onClick={actions.revote}
+                    >
+                        Re-estimate
+                    </button>
+                )}
             </div>
         );
     }

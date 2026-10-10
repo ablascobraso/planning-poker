@@ -251,6 +251,12 @@ export default function SessionView({
     // they're estimating ("Round 1 · 2 of 4 voted · Dev estimate").
     const targetName = session?.targets?.[session.targetIndex ?? 0]?.name ?? null;
 
+    // Once this round's estimate is saved, another round of the same field is
+    // rarely what the team wants - the next step is the next field, the next
+    // issue, or End - so "New round" steps aside. A small "Re-estimate" link
+    // next to the saved value covers the rare correction (see SaveEstimate).
+    const roundSaved = Boolean(session?.saved && session.saved.round === session.round);
+
     const leadLabel = leading
         ? " · You're leading"
         : ` · Led by ${session?.facilitatorName ?? 'the facilitator'}`;
@@ -300,7 +306,7 @@ export default function SessionView({
                                     Reveal cards
                                 </button>
                             )}
-                            {inControl && revealed && (
+                            {inControl && revealed && !roundSaved && (
                                 <button
                                     type="button"
                                     className="btn"
